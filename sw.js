@@ -27,7 +27,7 @@ self.addEventListener("activate", (event) => {
 });
 
 // Cache-first for app shell, falling back to network, and updating the cache
-// in the background so the next load picks up changes.
+// in the background so the next load picks up changes..
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
