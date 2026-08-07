@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "eu.nullvault.stagewhisper.twa",
-        "sha256_cert_fingerprints": ["0D:64:07:37:C7:B9:90:20:5A:18:6D:BB:DE:D8:8C:41:32:6A:34:4F:BE:7C:26:98:9E:6A:D2:CC:4B:12:59:C5"]
+        "sha256_cert_fingerprints": ["CF:0A:77:DB:15:8E:B0:1E:F1:95:B3:19:51:46:61:FD:85:A1:DC:CB:AB:53:5F:C1:80:04:64:67:81:39:2C:06"]
       }
     }]
