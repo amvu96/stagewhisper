@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "eu.nullvault.stagewhisper.twa",
+        "sha256_cert_fingerprints": ["0D:64:07:37:C7:B9:90:20:5A:18:6D:BB:DE:D8:8C:41:32:6A:34:4F:BE:7C:26:98:9E:6A:D2:CC:4B:12:59:C5"]
+      }
+    }]

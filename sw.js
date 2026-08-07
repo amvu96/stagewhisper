@@ -1,4 +1,4 @@
-const CACHE_NAME = "stage-whisper-v39";
+const CACHE_NAME = "stage-whisper-v40";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
