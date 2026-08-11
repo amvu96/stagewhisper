@@ -406,6 +406,146 @@
             width: 16px;
             height: 16px;
         }
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px; height: 1px;
+            padding: 0; margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .mode-toggle-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 14px;
+            width: 100%;
+            max-width: 100%;
+        }
+        .mode-toggle {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            align-items: stretch;
+            position: relative;
+            border: 2.5px solid var(--neon);
+            border-radius: 16px;
+            background: var(--panel);
+            box-shadow: 0 0 0 1px rgba(57,255,154,0.08);
+            overflow: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+        .mode-seg {
+            appearance: none;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            color: var(--muted);
+            font-family: inherit;
+            font-size: 0.62rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            padding: 10px 4px 8px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-width: 0;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .mode-seg + .mode-seg {
+            border-left: none;
+        }
+        .mode-seg + .mode-seg::before {
+            content: "";
+            position: absolute;
+            left: -1px;
+            top: -3px;
+            bottom: -3px;
+            width: 2.5px;
+            background: var(--neon);
+        }
+        .mode-seg svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            stroke: currentColor;
+        }
+        .mode-seg-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .mode-seg:hover {
+            color: var(--text);
+            background: rgba(57,255,154,0.06);
+        }
+        .mode-seg.active {
+            color: #04140c;
+            background: var(--neon);
+        }
+        .mode-seg.active svg {
+            stroke: #04140c;
+        }
+        .mode-seg:focus-visible {
+            outline: 2px solid var(--neon);
+            outline-offset: -3px;
+        }
+        .mode-seg-badge {
+            font-size: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--neon-dim);
+            border: 1px solid var(--neon-dim);
+            border-radius: 999px;
+            padding: 0px 4px;
+            display: none;
+        }
+        .mode-seg.active .mode-seg-badge {
+            color: #04140c;
+            border-color: #04140c;
+        }
+        .mode-status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            flex-wrap: wrap;
+        }
+        .mode-status-row .ai-key-btn {
+            margin: 0;
+        }
+        @media (min-width: 480px) {
+            .mode-toggle {
+                grid-template-columns: none;
+                display: flex;
+                align-items: stretch;
+                border-radius: 999px;
+            }
+            .mode-seg {
+                flex-direction: row;
+                flex: 1 1 auto;
+                font-size: 0.8rem;
+                padding: 11px 16px;
+                gap: 6px;
+            }
+            .mode-seg svg {
+                width: 15px;
+                height: 15px;
+            }
+            .mode-seg-badge {
+                font-size: 0.6rem;
+                padding: 1px 6px;
+                display: inline-block;
+            }
+        }
         button {
             font-family: inherit;
             cursor: pointer;
@@ -1036,14 +1176,52 @@
                 <input type="text" id="myChar" placeholder="e.g. JULIET">
                 <div class="hint">When set, everyone else's lines auto-display as your cue — only <i>your</i> lines stay hidden until you press the button.</div>
 
-                <div class="checkbox-row" style="margin-bottom:10px;">
-                    <input type="checkbox" id="aiMode" onchange="handleAiModeToggle()"> AI Mode (contextual hints for your lines)
-                    <button type="button" class="ai-key-btn" onclick="openAiSettingsModal()" title="AI Mode settings" aria-label="AI Mode settings">Settings</button>
-                </div>
+                <!-- Real state lives in these hidden checkboxes so existing logic (save/load, scoring, etc.)
+                     keeps working unchanged. The segmented button below just drives them. -->
+                <input type="checkbox" id="aiMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                <input type="checkbox" id="shuffleMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                <input type="checkbox" id="hintMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                <input type="checkbox" id="monologueMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
 
-                <div class="row">
-                    <div class="checkbox-row"><input type="checkbox" id="shuffleMode"> Shuffle (random cue, then your line — requires character name above)</div>
-                    <div class="checkbox-row"><input type="checkbox" id="hintMode"> Show first-letter hints for hidden lines</div>
+                <div class="mode-toggle-wrap">
+                    <div class="mode-toggle" role="group" aria-label="Practice mode toggles" id="modeToggleGroup">
+                        <button type="button" class="mode-seg" data-mode="ai" id="segAi" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2l1.8 5.6L19 9.5l-5.2 1.9L12 17l-1.8-5.6L5 9.5l5.2-1.9L12 2z"/>
+                            </svg>
+                            <span class="mode-seg-label">AI</span>
+                        </button>
+                        <button type="button" class="mode-seg" data-mode="shuffle" id="segShuffle" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="16 3 21 3 21 8"/>
+                                <line x1="4" y1="20" x2="21" y2="3"/>
+                                <polyline points="21 16 21 21 16 21"/>
+                                <line x1="15" y1="15" x2="21" y2="21"/>
+                                <line x1="4" y1="4" x2="9" y2="9"/>
+                            </svg>
+                            <span class="mode-seg-label">Shuffle</span>
+                        </button>
+                        <button type="button" class="mode-seg" data-mode="hints" id="segHints" aria-pressed="false" title="Show first-letter hints for hidden lines" aria-label="First-letter hints">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18h6"/>
+                                <path d="M10 22h4"/>
+                                <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.05V17h6v-.25c0-.85.4-1.55 1-2.05A7 7 0 0 0 12 2z"/>
+                            </svg>
+                            <span class="mode-seg-label">1st Letter</span>
+                        </button>
+                        <button type="button" class="mode-seg" data-mode="monologue" id="segMonologue" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+                                <path d="M19 11a7 7 0 0 1-14 0"/>
+                                <line x1="12" y1="18" x2="12" y2="22"/>
+                            </svg>
+                            <span class="mode-seg-label">Monologue</span>
+                            <span class="mode-seg-badge">WIP</span>
+                        </button>
+                    </div>
+                    <div class="mode-status-row">
+                        <span id="modeStatusText">No modes active</span>
+                    </div>
                 </div>
 
                 <label>Screenplay</label>
@@ -1887,6 +2065,72 @@
             }
         }
 
+        // ===== Segmented mode-toggle button =====
+        // The button is the visible control; the hidden checkboxes (#aiMode, #shuffleMode,
+        // #hintMode, #monologueMode) remain the source of truth that the rest of the app reads.
+        const MODE_SEG_MAP = {
+            ai: { seg: "segAi", checkbox: "aiMode" },
+            shuffle: { seg: "segShuffle", checkbox: "shuffleMode" },
+            hints: { seg: "segHints", checkbox: "hintMode" },
+            monologue: { seg: "segMonologue", checkbox: "monologueMode" }
+        };
+
+        function syncModeButtonsFromCheckboxes() {
+            Object.values(MODE_SEG_MAP).forEach(({ seg, checkbox }) => {
+                const segEl = document.getElementById(seg);
+                const cbEl = document.getElementById(checkbox);
+                if (!segEl || !cbEl) return;
+                segEl.classList.toggle("active", cbEl.checked);
+                segEl.setAttribute("aria-pressed", String(cbEl.checked));
+            });
+            updateModeStatusText();
+        }
+
+        function updateModeStatusText() {
+            const statusEl = document.getElementById("modeStatusText");
+            if (!statusEl) return;
+            if (document.getElementById("monologueMode").checked) {
+                statusEl.textContent = "Monologue mode — work in progress";
+                return;
+            }
+            const on = [];
+            if (document.getElementById("aiMode").checked) on.push("AI");
+            if (document.getElementById("shuffleMode").checked) on.push("Shuffle");
+            if (document.getElementById("hintMode").checked) on.push("1st Letter");
+            statusEl.textContent = on.length ? on.join(" + ") + " on" : "No modes active";
+        }
+
+        function handleMonologueToggle(active) {
+            // Placeholder entry point for monologue mode. Actual practice-flow behavior
+            // (single-character, no cues) is not implemented yet.
+            if (active) {
+                showAiToast("Monologue mode is a work in progress — practice flow unchanged for now.", true);
+            }
+        }
+
+        function initModeToggle() {
+            const group = document.getElementById("modeToggleGroup");
+            if (!group) return;
+            group.addEventListener("click", (e) => {
+                const segEl = e.target.closest(".mode-seg");
+                if (!segEl || !group.contains(segEl)) return;
+                const mode = segEl.dataset.mode;
+                const map = MODE_SEG_MAP[mode];
+                if (!map) return;
+                const cbEl = document.getElementById(map.checkbox);
+                cbEl.checked = !cbEl.checked;
+
+                syncModeButtonsFromCheckboxes();
+
+                if (mode === "ai") {
+                    handleAiModeToggle();
+                } else if (mode === "monologue") {
+                    handleMonologueToggle(cbEl.checked);
+                }
+            });
+            syncModeButtonsFromCheckboxes();
+        }
+
         let aiToastTimer = null;
 
         function showAiToast(msg, warn) {
@@ -2263,6 +2507,7 @@
             document.getElementById("speakOthers").checked = !!s.speak;
             document.getElementById("hintMode").checked = !!s.hint;
             document.getElementById("aiMode").checked = !!s.ai;
+            syncModeButtonsFromCheckboxes();
             document.getElementById("ttsLang").value = s.ttsLang || "ro-RO";
             document.getElementById("screenplayName").value = play;
             document.getElementById("sceneName").value = name;
@@ -2728,6 +2973,7 @@
                 document.getElementById('speakOthers').checked = !!firstScene.speak;
                 document.getElementById('hintMode').checked = !!firstScene.hint;
                 document.getElementById('aiMode').checked = !!firstScene.ai;
+                syncModeButtonsFromCheckboxes();
                 document.getElementById('ttsLang').value = firstScene.ttsLang || 'ro-RO';
                 document.getElementById('screenplayName').value = play;
                 document.getElementById('sceneName').value = '';
@@ -3282,6 +3528,7 @@
                 });
             }
             updateInstallButton();
+            initModeToggle();
         });
     </script>
 
@@ -3289,7 +3536,7 @@
         <button id="scenesBarBtn" onclick="toggleScenesSheet()">Saved Scenes</button>
         <div class="bar-right">
             <button id="homeBtn" class="theme-toggle-btn" onclick="backToSetup()" title="Home" aria-label="Home" style="display:none;">⌂</button>
-            <button id="aiSettingsBtn" class="theme-toggle-btn" onclick="openAiSettingsModal()" title="AI Mode settings" aria-label="AI Mode settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 3.8 2 4.7.6.7 1 1.1 1 2.3v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-1.2.4-1.6 1-2.3.8-.9 2-2.3 2-4.7a7 7 0 0 0-7-7Z"/><path d="M9.5 21h5"/><path d="M10 17h4"/></svg></button>
+            <button id="aiSettingsBtn" class="theme-toggle-btn" onclick="openAiSettingsModal()" title="AI Mode settings" aria-label="AI Mode settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.6L19 9.5l-5.2 1.9L12 17l-1.8-5.6L5 9.5l5.2-1.9L12 2z"/></svg></button>
             <button id="ttsBtn" class="theme-toggle-btn" onclick="toggleTtsSheet()" title="Text-to-speech settings" aria-label="Text-to-speech settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/></svg></button>
             <button id="installBtn" title="Install App" aria-label="Install App"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></button>
             <button id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme">☀</button>
