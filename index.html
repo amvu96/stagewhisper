@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1169,12 +1170,29 @@
 
             <div class="card" id="setup">
                 <label>Paste your script</label>
-                <textarea id="scriptInput" oninput="updateStartButtonState()" placeholder="One line per row. For cue practice, use format:&#10;JULIET: O Romeo, Romeo, wherefore art thou Romeo?&#10;ROMEO: Shall I hear more, or shall I speak at this?"></textarea>
+                <textarea id="scriptInput" oninput="updateStartButtonState(); if(isMonologueMode) updateMonologueSections();" placeholder="One line per row. For cue practice, use format:&#10;JULIET: O Romeo, Romeo, wherefore art thou Romeo?&#10;ROMEO: Shall I hear more, or shall I speak at this?"></textarea>
                 <div class="hint">Tip: use <b>CHARACTER: dialogue</b> per line to unlock cue mode (see below). Plain lines work fine too for a simple read-through.</div>
 
                 <label>Your character name (optional, enables cue mode)</label>
                 <input type="text" id="myChar" placeholder="e.g. JULIET">
                 <div class="hint">When set, everyone else's lines auto-display as your cue — only <i>your</i> lines stay hidden until you press the button.</div>
+
+                <!-- Monologue section preview (hidden by default) -->
+                <div id="monologueSectionPreview" style="display:none;">
+                    <label>Sections (<span id="sectionCount">0</span> sections detected)</label>
+                    <div id="sectionList" style="max-height:200px; overflow-y:auto; padding:8px; background:var(--input-bg); border-radius:4px; border:1px solid var(--border);"></div>
+                    <div class="hint">Monologue auto-split into sections. You'll practice each section independently.</div>
+
+                    <label style="margin-top:12px;">Practice Session</label>
+                    <select id="monologuePracticeMode" style="width:100%;">
+                        <option value="all">All sections (sequential)</option>
+                        <option value="due">Due for review</option>
+                        <option value="weak">Weak sections only</option>
+                        <option value="random">Random order</option>
+                        <option value="randomStart">Random start point</option>
+                    </select>
+                    <div class="hint">Choose which sections to practice in this session.</div>
+                </div>
 
                 <!-- Real state lives in these hidden checkboxes so existing logic (save/load, scoring, etc.)
                      keeps working unchanged. The segmented button below just drives them. -->
@@ -1264,7 +1282,7 @@
                 <div class="controls-row">
                     <button id="hideBtn" onclick="hideAgain()">Hide Again</button>
                     <button onclick="restart()">Restart</button>
-                    <button onclick="reshuffle()">Reshuffle</button>
+                    <button id="reshuffleBtn" onclick="reshuffle()">Reshuffle</button>
                 </div>
 
                 <div class="score-row" id="scoreRow" style="display:none;">
@@ -1278,15 +1296,15 @@
                     <button onclick="changeFont(1)">A+</button>
                 </div>
 
-                <div class="hint" style="margin-top:14px;text-align:center;">Space / Enter = reveal or next &nbsp;•&nbsp; G = got it &nbsp;•&nbsp; M = missed it</div>
+                <div class="hint" id="practiceHint" style="margin-top:14px;text-align:center;">Space / Enter = reveal or next &nbsp;•&nbsp; G = got it &nbsp;•&nbsp; M = missed it</div>
             </div>
 
             <div id="done">
                 <h2>Run complete</h2>
                 <div id="doneStats"></div>
-                <button class="primary" onclick="restart()">Run it again</button>
-                <button id="redoMissedBtn" style="display:none;margin-top:10px;width:100%;" onclick="redoMissed()">Redo missed lines only</button>
-                <button style="margin-top:10px;width:100%;" onclick="backToSetup()">Finish</button>
+                <button class="primary" style="margin-top:24px;width:100%;max-width:320px;" onclick="restart()">Run it again</button>
+                <button id="redoMissedBtn" style="display:none;margin-top:10px;width:100%;max-width:320px;" onclick="redoMissed()">Redo missed lines only</button>
+                <button style="margin-top:10px;width:100%;max-width:320px;" onclick="backToSetup()">Finish</button>
             </div>
 
             <footer>Everything stays in this browser tab — nothing is saved or uploaded, except scenes you choose to export.</footer>
@@ -1483,6 +1501,14 @@
         let currentHints = null;
         let currentHintText = null;
         let aiHintRevealed = false;
+
+        // Monologue mode state
+        let isMonologueMode = false;
+        let monologueSections = [];
+        let sectionPos = 0;
+        let currentMonologueLevel = 0; // 0=Read, 4=Full Recall for MVP
+        let sectionMastery = {};
+        let monologueHintLevel = 0;
         const MISTRAL_KEY_STORAGE = "mistralApiKey";
         window.swHintsIndex = window.swHintsIndex || new Set();
 
@@ -1849,6 +1875,14 @@
                 ttsLang: document.getElementById("ttsLang").value,
                 updatedAt: Date.now()
             };
+
+            // Save monologue-specific data
+            if (isMonologueMode) {
+                data[play][name].isMonologue = true;
+                data[play][name].sections = monologueSections;
+                data[play][name].sectionMastery = sectionMastery || {};
+            }
+
             if (isNew) {
                 if (!Array.isArray(data[play].__order)) data[play].__order = getSceneNames(data[play]).filter(n => n !==
                 name);
@@ -2101,10 +2135,99 @@
         }
 
         function handleMonologueToggle(active) {
-            // Placeholder entry point for monologue mode. Actual practice-flow behavior
-            // (single-character, no cues) is not implemented yet.
+            isMonologueMode = active;
+
+            // Show/hide character name field (not needed for monologue)
+            const myCharLabel = document.querySelector('label[for="myChar"]') ||
+                               Array.from(document.querySelectorAll('label')).find(l =>
+                                   l.textContent.includes('Your character name'));
+            const myCharInput = document.getElementById('myChar');
+            const myCharHint = myCharInput?.nextElementSibling;
+
+            if (myCharLabel) myCharLabel.style.display = active ? 'none' : 'block';
+            if (myCharInput) myCharInput.style.display = active ? 'none' : 'block';
+            if (myCharHint && myCharHint.classList.contains('hint')) {
+                myCharHint.style.display = active ? 'none' : 'block';
+            }
+
+            // Show/hide section preview
+            const preview = document.getElementById('monologueSectionPreview');
+            if (preview) {
+                preview.style.display = active ? 'block' : 'none';
+            }
+
             if (active) {
-                showAiToast("Monologue mode is a work in progress — practice flow unchanged for now.", true);
+                // Parse script into sections
+                updateMonologueSections();
+                // Remove WIP badge
+                const badge = document.querySelector('#segMonologue .mode-seg-badge');
+                if (badge) badge.style.display = 'none';
+            } else {
+                // Clear sections when toggled off
+                monologueSections = [];
+            }
+        }
+
+        function updateMonologueSections() {
+            const raw = document.getElementById("scriptInput").value;
+            if (!raw || !raw.trim()) {
+                monologueSections = [];
+                renderSectionPreview();
+                return;
+            }
+
+            monologueSections = parseMonologue(raw);
+            renderSectionPreview();
+        }
+
+        function renderSectionPreview() {
+            const countEl = document.getElementById('sectionCount');
+            const listEl = document.getElementById('sectionList');
+
+            if (countEl) countEl.textContent = monologueSections.length;
+
+            if (listEl) {
+                if (monologueSections.length === 0) {
+                    listEl.innerHTML = '<div style="color:var(--muted); font-style:italic;">Paste your monologue above to see sections</div>';
+                } else {
+                    const now = Date.now();
+                    listEl.innerHTML = monologueSections.map((section, idx) => {
+                        const preview = section.text.length > 80
+                            ? section.text.substring(0, 80) + '...'
+                            : section.text;
+
+                        const mastery = sectionMastery[idx];
+                        let statusColor = 'var(--muted)';
+                        let statusText = 'New';
+                        let borderColor = 'var(--border)';
+
+                        if (mastery) {
+                            if (mastery.level === 4 && mastery.successes >= 3) {
+                                statusColor = 'var(--neon)';
+                                statusText = 'Mastered ✓';
+                                borderColor = 'var(--neon-dim)';
+                            } else if (mastery.attempts > 0) {
+                                statusColor = 'var(--cyan)';
+                                statusText = `Learning (${mastery.successes}/3)`;
+                                borderColor = 'var(--cyan)';
+
+                                // Show if due for review
+                                if (mastery.nextReview && mastery.nextReview <= now) {
+                                    statusText += ' • Due';
+                                    borderColor = 'var(--neon)';
+                                }
+                            }
+                        }
+
+                        return `<div style="margin-bottom:8px; padding:6px; background:var(--panel); border-radius:3px; border-left:3px solid ${borderColor};">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                                <div style="font-size:0.8rem; color:var(--muted);">Section ${idx + 1}</div>
+                                <div style="font-size:0.75rem; color:${statusColor};">${statusText}</div>
+                            </div>
+                            <div style="font-size:0.85rem;">${preview}</div>
+                        </div>`;
+                    }).join('');
+                }
             }
         }
 
@@ -2507,6 +2630,20 @@
             document.getElementById("speakOthers").checked = !!s.speak;
             document.getElementById("hintMode").checked = !!s.hint;
             document.getElementById("aiMode").checked = !!s.ai;
+
+            // Load monologue mode data
+            const isMonologue = !!s.isMonologue;
+            document.getElementById("monologueMode").checked = isMonologue;
+            isMonologueMode = isMonologue; // Set global variable
+            if (isMonologue) {
+                monologueSections = s.sections || [];
+                sectionMastery = s.sectionMastery || {};
+                handleMonologueToggle(true);
+            } else {
+                isMonologueMode = false;
+                handleMonologueToggle(false);
+            }
+
             syncModeButtonsFromCheckboxes();
             document.getElementById("ttsLang").value = s.ttsLang || "ro-RO";
             document.getElementById("screenplayName").value = play;
@@ -2930,6 +3067,71 @@
             }).join(" ");
         }
 
+        // Monologue parsing functions
+        function splitIntoSentences(text) {
+            // Split on sentence boundaries while preserving the delimiter
+            const sentences = [];
+            const regex = /[.!?]+\s+/g;
+            let lastIdx = 0;
+            let match;
+
+            while ((match = regex.exec(text)) !== null) {
+                const endIdx = regex.lastIndex;
+                sentences.push(text.substring(lastIdx, endIdx).trim());
+                lastIdx = endIdx;
+            }
+
+            // Add remaining text
+            if (lastIdx < text.length) {
+                sentences.push(text.substring(lastIdx).trim());
+            }
+
+            return sentences.filter(s => s.length > 0);
+        }
+
+        function parseMonologue(text) {
+            // Auto-split monologue into manageable sections
+            const trimmed = text.trim();
+            if (!trimmed) return [];
+
+            // First try splitting on double newlines (paragraph breaks)
+            const paragraphs = trimmed.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
+
+            if (paragraphs.length > 1) {
+                // Use paragraphs as sections
+                return paragraphs.map(text => ({ text }));
+            }
+
+            // Otherwise split into sentences
+            const sentences = splitIntoSentences(trimmed);
+
+            // Group sentences into sections of ~3-5 sentences or max ~150 words
+            const sections = [];
+            let currentSection = [];
+            let currentWordCount = 0;
+
+            sentences.forEach(sentence => {
+                const words = sentence.split(/\s+/).length;
+
+                if (currentSection.length >= 3 && currentWordCount + words > 150) {
+                    // Start new section
+                    sections.push({ text: currentSection.join(' ') });
+                    currentSection = [sentence];
+                    currentWordCount = words;
+                } else {
+                    currentSection.push(sentence);
+                    currentWordCount += words;
+                }
+            });
+
+            // Add final section
+            if (currentSection.length > 0) {
+                sections.push({ text: currentSection.join(' ') });
+            }
+
+            return sections.length > 0 ? sections : [{ text: trimmed }];
+        }
+
         const SCENE_MARKER_CHAR = "ZZZSCENEDIVIDERZZZ";
 
         function playAllScenes(play) {
@@ -2989,6 +3191,27 @@
                 alert("Paste in your script first.");
                 return;
             }
+
+            // Check if monologue mode
+            const isMonologue = document.getElementById("monologueMode").checked;
+            if (isMonologue) {
+                startMonologuePractice();
+                return;
+            }
+
+            // Reset button labels for dialogue mode
+            const reshuffleBtn = document.getElementById("reshuffleBtn");
+            if (reshuffleBtn) {
+                reshuffleBtn.textContent = "Reshuffle";
+                reshuffleBtn.title = "";
+            }
+
+            const practiceHint = document.getElementById("practiceHint");
+            if (practiceHint) {
+                practiceHint.textContent = "Space / Enter = reveal or next • G = got it • M = missed it";
+            }
+
+            // Existing dialogue practice flow
             allLines = parseScript(raw);
             myChar = document.getElementById("myChar").value.trim().toUpperCase();
             cueMode = myChar.length > 0;
@@ -3044,6 +3267,550 @@
             return cueMode && line.character && line.character.toUpperCase() === myChar;
         }
 
+        // Monologue practice flow
+        let selectedSectionOrder = []; // Array of section indices to practice
+
+        function startMonologuePractice() {
+            // Set global flag
+            isMonologueMode = true;
+
+            // Ensure sections are parsed
+            if (monologueSections.length === 0) {
+                updateMonologueSections();
+            }
+
+            if (monologueSections.length === 0) {
+                alert("No sections detected. Please paste your monologue text first.");
+                return;
+            }
+
+            // Get practice mode selection
+            const practiceMode = document.getElementById("monologuePracticeMode")?.value || 'all';
+            selectedSectionOrder = getSectionsToPractice(practiceMode);
+
+            if (selectedSectionOrder.length === 0) {
+                alert("No sections match your selection. Try a different practice mode.");
+                return;
+            }
+
+            // Initialize section practice
+            sectionPos = 0; // Position in selectedSectionOrder, not actual section index
+            revealed = false;
+            gotIt = 0;
+            missed = 0;
+            monologueHintLevel = 0;
+
+            // For MVP: default to Read mode (level 0) or Full Recall (level 4)
+            // User can toggle between them
+            currentMonologueLevel = 0; // Start with Read mode
+
+            // Switch to practice screen
+            document.getElementById("setup").style.display = "none";
+            document.getElementById("done").style.display = "none";
+            document.getElementById("practice").style.display = "flex";
+
+            // Show score buttons for Full Recall mode only
+            const scoreButtons = document.getElementById("scoreButtons");
+            if (scoreButtons) {
+                scoreButtons.style.display = currentMonologueLevel === 4 ? "flex" : "none";
+            }
+
+            document.getElementById("scoreRow").style.display = "flex"; // Show session stats
+            document.querySelector(".side-col").style.display = "none";
+
+            // Update button labels and hints for monologue mode
+            const reshuffleBtn = document.getElementById("reshuffleBtn");
+            if (reshuffleBtn) {
+                reshuffleBtn.textContent = "Read Mode";
+                reshuffleBtn.title = "Cycle through difficulty levels";
+            }
+
+            const practiceHint = document.getElementById("practiceHint");
+            if (practiceHint) {
+                practiceHint.textContent = "Space = next/reveal • Mode button = cycle difficulty • ? = hints • G/M = score";
+            }
+
+            currentScreen = "practice";
+            closeScenesSheet();
+            updateBottomBarVisibility();
+            updateScore();
+            renderMonologueSection();
+        }
+
+        function renderMonologueSection() {
+            if (sectionPos >= selectedSectionOrder.length) {
+                showMonologueDone();
+                return;
+            }
+
+            const sectionIdx = selectedSectionOrder[sectionPos]; // Get actual section index
+            const section = monologueSections[sectionIdx];
+            const totalInSession = selectedSectionOrder.length;
+
+            // Update progress
+            const progressText = document.getElementById("progressText");
+            if (progressText) {
+                progressText.textContent = `SECTION ${sectionPos + 1} / ${totalInSession}`;
+            }
+
+            const progressFill = document.getElementById("progressFill");
+            if (progressFill) {
+                const pct = (sectionPos / totalInSession) * 100;
+                progressFill.style.width = pct + "%";
+            }
+
+            // Update score display
+            updateScore();
+
+            // Clear context line (not used in monologue mode)
+            const contextLine = document.getElementById("contextLine");
+            if (contextLine) contextLine.style.display = "none";
+
+            // Clear scene banner (not used in monologue mode)
+            const sceneBanner = document.getElementById("sceneBanner");
+            if (sceneBanner) {
+                sceneBanner.textContent = "";
+                sceneBanner.classList.remove("show");
+            }
+
+            // Update character name area to show difficulty level and section number
+            const charName = document.getElementById("charName");
+            if (charName) {
+                const levelNames = ["READ MODE", "PARTIAL RECALL", "FIRST-WORD CUES", "MINIMAL CUES", "FULL RECALL"];
+                const masteryIndicator = getSectionMasteryIndicator(sectionIdx);
+                charName.textContent = `${levelNames[currentMonologueLevel]} ${masteryIndicator}`;
+                charName.style.display = "block";
+            }
+
+            // Render the section based on difficulty level
+            const lineText = document.getElementById("lineText");
+            if (!lineText) return;
+
+            // Disable flex layout for monologue text (causes column wrapping)
+            lineText.style.display = 'block';
+            lineText.style.whiteSpace = 'normal';
+            lineText.style.wordWrap = 'break-word';
+
+            if (currentMonologueLevel === 0) {
+                // Read Mode: show full text
+                lineText.innerHTML = section.text;
+                lineText.style.fontSize = fontSize + "rem";
+            } else if (currentMonologueLevel === 1) {
+                // Partial Recall Mode: fill-in-the-blanks
+                if (!revealed) {
+                    lineText.innerHTML = createFillInBlanks(section.text, 0.3);
+                } else {
+                    lineText.innerHTML = section.text;
+                }
+                lineText.style.fontSize = fontSize + "rem";
+            } else if (currentMonologueLevel === 2) {
+                // First-Word Cues Mode
+                if (!revealed) {
+                    lineText.innerHTML = createFirstWordCues(section.text);
+                } else {
+                    lineText.innerHTML = section.text;
+                }
+                lineText.style.fontSize = fontSize + "rem";
+            } else if (currentMonologueLevel === 4) {
+                // Full Recall Mode: hide text until revealed
+                if (!revealed) {
+                    lineText.innerHTML = `<span style="color:var(--muted); font-style:italic;">· · ·</span>`;
+                } else {
+                    lineText.innerHTML = section.text;
+                }
+                lineText.style.fontSize = fontSize + "rem";
+            }
+
+            // Show/hide AI hint row (repurpose for progressive hints)
+            const aiHintRow = document.getElementById("aiHintRow");
+            if (aiHintRow && currentMonologueLevel >= 2 && !revealed) {
+                // Show hint button for harder modes
+                aiHintRow.style.display = "flex";
+                updateMonologueHint(section.text);
+            } else {
+                if (aiHintRow) aiHintRow.style.display = "none";
+            }
+
+            // Show score buttons only in recall modes and after revealing
+            const scoreButtons = document.getElementById("scoreButtons");
+            if (scoreButtons) {
+                scoreButtons.style.display = (currentMonologueLevel >= 1 && revealed) ? "flex" : "none";
+            }
+        }
+
+        function getSectionMasteryIndicator(sectionIdx) {
+            const m = sectionMastery[sectionIdx];
+            if (!m) return "";
+
+            if (m.level === 4 && m.successes >= 3) {
+                return "✓"; // Mastered
+            } else if (m.attempts > 0) {
+                return `(${m.successes}/3)`;
+            }
+            return "";
+        }
+
+        // Helper functions for different difficulty levels
+        function createFillInBlanks(text, blankRatio = 0.3) {
+            const words = text.split(/\s+/);
+            const result = words.map((word, idx) => {
+                // Keep first and last words visible
+                if (idx === 0 || idx === words.length - 1) return word;
+                // Blank out approximately blankRatio of words
+                if (Math.random() < blankRatio) {
+                    // Simple inline blank - matches word length
+                    const wordLen = word.replace(/[^A-Za-z0-9]/g, '').length;
+                    const blankLen = Math.max(3, wordLen);
+                    return `<span style="color:var(--muted); font-style:italic;">${'_'.repeat(blankLen)}</span>`;
+                }
+                return word;
+            });
+            return result.join(' ');
+        }
+
+        function createFirstWordCues(text) {
+            // Split into sentences, show first word of each
+            const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+            return sentences.map(s => {
+                const trimmed = s.trim();
+                const words = trimmed.split(/\s+/);
+                if (words.length === 0) return '';
+                const firstWord = words[0];
+                const punctuation = trimmed.match(/[.!?]+$/)?.[0] || '';
+                return `${firstWord} <span style="color:var(--muted);">···</span>${punctuation}`;
+            }).join(' ');
+        }
+
+        function updateMonologueHint(text) {
+            const aiHintText = document.getElementById("aiHintText");
+            const aiHintBtn = document.getElementById("aiHintBtn");
+
+            if (!aiHintText || !aiHintBtn) return;
+
+            let hintText = "";
+            switch(monologueHintLevel) {
+                case 0:
+                    hintText = "";
+                    aiHintBtn.textContent = "?";
+                    break;
+                case 1:
+                    hintText = getFirstLetters(text);
+                    aiHintBtn.textContent = "1";
+                    break;
+                case 2:
+                    hintText = getFirstWord(text);
+                    aiHintBtn.textContent = "2";
+                    break;
+                case 3:
+                    hintText = getFirstFewWords(text, 3);
+                    aiHintBtn.textContent = "3";
+                    break;
+                case 4:
+                    hintText = createFillInBlanks(text, 0.3);
+                    aiHintBtn.textContent = "4";
+                    break;
+                case 5:
+                    hintText = text;
+                    aiHintBtn.textContent = "✓";
+                    break;
+            }
+
+            aiHintText.innerHTML = hintText;
+            aiHintText.classList.toggle("show", monologueHintLevel > 0);
+        }
+
+        function getFirstLetters(text) {
+            return text.split(/\s+/).slice(0, 5).map(w => w[0] || '').join(' ');
+        }
+
+        function getFirstWord(text) {
+            const words = text.split(/\s+/);
+            return words[0] || '';
+        }
+
+        function getFirstFewWords(text, count) {
+            const words = text.split(/\s+/);
+            return words.slice(0, count).join(' ') + '...';
+        }
+
+        function toggleMonologueHint() {
+            monologueHintLevel = (monologueHintLevel + 1) % 6;
+            const sectionIdx = selectedSectionOrder[sectionPos];
+            const section = monologueSections[sectionIdx];
+            updateMonologueHint(section.text);
+        }
+
+        function handleMonologuePress() {
+            if (currentMonologueLevel === 0) {
+                // Read Mode: just advance to next section
+                sectionPos++;
+                revealed = false;
+                monologueHintLevel = 0;
+                renderMonologueSection();
+            } else {
+                // Partial Recall, First-Word, or Full Recall: reveal then advance
+                if (!revealed) {
+                    revealed = true;
+                    renderMonologueSection();
+                } else {
+                    // Already revealed, wait for score
+                    // (handled by score buttons)
+                }
+            }
+        }
+
+        function markMonologueScore(success) {
+            if (!revealed && currentMonologueLevel > 0) {
+                // Need to reveal first
+                return;
+            }
+
+            const sectionIdx = selectedSectionOrder[sectionPos];
+
+            // Update session stats
+            if (success) {
+                gotIt++;
+            } else {
+                missed++;
+            }
+
+            // Update section mastery
+            updateSectionMastery(sectionIdx, success);
+
+            // Advance to next section
+            sectionPos++;
+            revealed = false;
+            monologueHintLevel = 0;
+            renderMonologueSection();
+        }
+
+        function showMonologueDone() {
+            document.getElementById("practice").style.display = "none";
+            const doneScreen = document.getElementById("done");
+            doneScreen.style.display = "block"; // Use block, not flex for proper vertical layout
+            currentScreen = "done";
+
+            const totalSections = monologueSections.length;
+            const now = Date.now();
+
+            // Calculate various stats
+            const masteredCount = Object.keys(sectionMastery).filter(idx => {
+                const m = sectionMastery[idx];
+                return m && m.successes >= 3 && m.level === 4;
+            }).length;
+
+            const dueCount = monologueSections.filter((_, idx) => {
+                const m = sectionMastery[idx];
+                if (!m || !m.nextReview) return true; // Never practiced
+                return m.nextReview <= now;
+            }).length;
+
+            const weakCount = monologueSections.filter((_, idx) => {
+                const m = sectionMastery[idx];
+                return !m || m.level < 4 || m.successes < 3;
+            }).length;
+
+            const masteryPct = totalSections > 0 ? Math.round((masteredCount / totalSections) * 100) : 0;
+
+            // Get weak section numbers
+            const weakSections = monologueSections
+                .map((_, idx) => {
+                    const m = sectionMastery[idx];
+                    return { idx, weak: !m || m.level < 4 || m.successes < 3 };
+                })
+                .filter(s => s.weak)
+                .slice(0, 5) // Show max 5
+                .map(s => s.idx + 1)
+                .join(', ');
+
+            const stats = document.getElementById("doneStats");
+            if (stats) {
+                let recommendation = '';
+                if (dueCount > 0) {
+                    recommendation = `<div style="margin-top:20px; padding:16px; background:var(--panel); border-radius:6px; border-left:4px solid var(--neon); text-align:left;">
+                        <div style="font-size:0.9rem; color:var(--neon); margin-bottom:4px;">📅 Next Step</div>
+                        <div style="font-size:0.95rem;">Practice ${dueCount} section${dueCount > 1 ? 's' : ''} due for review</div>
+                    </div>`;
+                } else if (weakCount > 0) {
+                    recommendation = `<div style="margin-top:20px; padding:16px; background:var(--panel); border-radius:6px; border-left:4px solid var(--cyan); text-align:left;">
+                        <div style="font-size:0.9rem; color:var(--cyan); margin-bottom:4px;">💪 Next Step</div>
+                        <div style="font-size:0.95rem;">Practice weak sections${weakSections ? ': ' + weakSections : ''}</div>
+                    </div>`;
+                } else {
+                    recommendation = `<div style="margin-top:20px; padding:16px; background:var(--panel); border-radius:6px; border-left:4px solid var(--neon); text-align:left;">
+                        <div style="font-size:0.9rem; color:var(--neon; margin-bottom:4px;">🎉 Excellent!</div>
+                        <div style="font-size:0.95rem;">All sections mastered!</div>
+                    </div>`;
+                }
+
+                stats.innerHTML = `
+                    <div style="text-align:center; margin-bottom:28px;">
+                        <div style="color:var(--neon); font-size:4rem; font-weight:bold; line-height:1; margin-bottom:4px;">${masteryPct}<span style="font-size:2rem;">%</span></div>
+                        <div style="color:var(--muted); font-size:0.75rem; text-transform:uppercase; letter-spacing:1.5px;">Mastery</div>
+                    </div>
+
+                    <div style="margin-bottom:24px;">
+                        <div style="background:var(--panel); padding:14px; border-radius:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:var(--muted); font-size:0.85rem;">Sections Mastered</div>
+                            <div style="color:var(--neon); font-size:1.3rem; font-weight:bold;">${masteredCount}<span style="color:var(--muted); font-size:0.9rem;">/${totalSections}</span></div>
+                        </div>
+                        <div style="background:var(--panel); padding:14px; border-radius:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:var(--muted); font-size:0.85rem;">Got it</div>
+                            <div style="color:var(--neon); font-size:1.3rem; font-weight:bold;">${gotIt}</div>
+                        </div>
+                        <div style="background:var(--panel); padding:14px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:var(--muted); font-size:0.85rem;">Missed</div>
+                            <div style="color:var(--danger); font-size:1.3rem; font-weight:bold;">${missed}</div>
+                        </div>
+                    </div>
+
+                    ${recommendation}
+                `;
+            }
+
+            // Hide "Redo missed" button for monologue mode
+            const redoBtn = document.getElementById("redoMissedBtn");
+            if (redoBtn) redoBtn.style.display = "none";
+        }
+
+        // Mastery tracking functions
+        function createDefaultMastery() {
+            return {
+                level: 0,           // Current difficulty level (0-4)
+                attempts: 0,        // Total attempts
+                successes: 0,       // Consecutive successes
+                lastReviewed: null, // Last practice timestamp
+                easeFactor: 2.5,    // SM-2 ease factor (default 2.5)
+                interval: 0,        // Days until next review
+                nextReview: null    // Next review timestamp
+            };
+        }
+
+        function updateSectionMastery(idx, success) {
+            if (!sectionMastery[idx]) {
+                sectionMastery[idx] = createDefaultMastery();
+            }
+
+            const m = sectionMastery[idx];
+            m.attempts++;
+            m.lastReviewed = Date.now();
+
+            // SM-2 quality: 0=failed, 1=hard, 2=good, 3=perfect
+            // Map success boolean to quality: false->0, true->2 (good)
+            // In Full Recall mode, "Got it" = good (2), "Missed" = failed (0)
+            const quality = success ? 2 : 0;
+
+            if (success) {
+                m.successes++;
+
+                // Check if should level up
+                if (currentMonologueLevel === 4 && m.successes >= 3) {
+                    m.level = 4; // Mark as mastered
+                }
+            } else {
+                // Reset consecutive successes on failure
+                m.successes = 0;
+
+                // Optionally drop level on repeated failures
+                if (m.attempts > 3 && m.successes === 0) {
+                    m.level = Math.max(0, m.level - 1);
+                }
+            }
+
+            // SM-2 Algorithm for scheduling
+            // Update ease factor
+            m.easeFactor = Math.max(1.3, m.easeFactor + (0.1 - (3 - quality) * (0.08 + (3 - quality) * 0.02)));
+
+            // Calculate next interval
+            if (quality < 2) {
+                // Failed or hard: review soon
+                m.interval = 1; // 1 day
+            } else {
+                // Good or perfect: increase interval
+                if (m.attempts === 1) {
+                    m.interval = 1; // First time: 1 day
+                } else if (m.attempts === 2) {
+                    m.interval = 6; // Second time: 6 days
+                } else {
+                    m.interval = Math.round(m.interval * m.easeFactor);
+                }
+            }
+
+            // Set next review date
+            m.nextReview = Date.now() + (m.interval * 24 * 60 * 60 * 1000);
+
+            return m;
+        }
+
+        function getSectionMasteryLevel(idx) {
+            return sectionMastery[idx]?.level || 0;
+        }
+
+        function calculateMasteryPercentage() {
+            if (monologueSections.length === 0) return 0;
+
+            const masteredCount = Object.keys(sectionMastery).filter(idx => {
+                const m = sectionMastery[idx];
+                return m && m.successes >= 3 && m.level === 4;
+            }).length;
+
+            return Math.round((masteredCount / monologueSections.length) * 100);
+        }
+
+        // Section selection functions
+        function getSectionsToPractice(mode) {
+            const now = Date.now();
+            let selectedIndices = [];
+
+            switch(mode) {
+                case 'all':
+                    // All sections in order
+                    selectedIndices = monologueSections.map((_, i) => i);
+                    break;
+
+                case 'due':
+                    // Sections due for review
+                    selectedIndices = monologueSections
+                        .map((_, i) => i)
+                        .filter(i => {
+                            const m = sectionMastery[i];
+                            if (!m || !m.nextReview) return true; // Never practiced
+                            return m.nextReview <= now;
+                        });
+                    break;
+
+                case 'weak':
+                    // Sections not yet mastered
+                    selectedIndices = monologueSections
+                        .map((_, i) => i)
+                        .filter(i => {
+                            const m = sectionMastery[i];
+                            return !m || m.level < 4 || m.successes < 3;
+                        });
+                    break;
+
+                case 'random':
+                    // All sections in random order
+                    selectedIndices = monologueSections.map((_, i) => i);
+                    selectedIndices = shuffleArray(selectedIndices);
+                    break;
+
+                case 'randomStart':
+                    // Start at random position, then sequential
+                    const startIdx = Math.floor(Math.random() * monologueSections.length);
+                    selectedIndices = [];
+                    for (let i = 0; i < monologueSections.length; i++) {
+                        selectedIndices.push((startIdx + i) % monologueSections.length);
+                    }
+                    break;
+
+                default:
+                    selectedIndices = monologueSections.map((_, i) => i);
+            }
+
+            return selectedIndices;
+        }
+
         function speak(text) {
             if (!speakOn) return;
             try {
@@ -3082,6 +3849,12 @@
         }
 
         function renderCurrent() {
+            // Branch to monologue rendering if in monologue mode
+            if (isMonologueMode) {
+                renderMonologueSection();
+                return;
+            }
+
             if (pos >= order.length) {
                 showDone();
                 return;
@@ -3180,6 +3953,12 @@
         }
 
         function toggleAiHint() {
+            // Branch to monologue hint if in monologue mode
+            if (isMonologueMode) {
+                toggleMonologueHint();
+                return;
+            }
+
             if (!currentHintText) return;
             const aiHintEl = document.getElementById("aiHintText");
             aiHintRevealed = !aiHintRevealed;
@@ -3193,6 +3972,12 @@
         }
 
         function handlePress() {
+            // Branch to monologue handling if in monologue mode
+            if (isMonologueMode) {
+                handleMonologuePress();
+                return;
+            }
+
             const line = allLines[order[pos]];
             const mine = isMyLine(line);
             if ((mine || !cueMode) && !revealed) {
@@ -3215,6 +4000,12 @@
         }
 
         function markScore(good) {
+            // Branch to monologue scoring if in monologue mode
+            if (isMonologueMode) {
+                markMonologueScore(good);
+                return;
+            }
+
             const idx = order[pos];
             if (good) {
                 gotIt++;
@@ -3270,29 +4061,67 @@
         }
 
         function restart() {
-            pos = 0;
-            revealed = false;
-            gotIt = 0;
-            missed = 0;
-            missedSet = new Set();
-            updateScore();
-            document.getElementById("done").style.display = "none";
-            document.getElementById("practice").style.display = "flex";
-            document.getElementById("scoreRow").style.display = cueMode ? "flex" : "none";
-            currentScreen = "practice";
-            updateBottomBarVisibility();
-            renderCurrent();
+            if (isMonologueMode) {
+                // Restart monologue practice
+                sectionPos = 0;
+                revealed = false;
+                gotIt = 0;
+                missed = 0;
+                document.getElementById("done").style.display = "none";
+                document.getElementById("practice").style.display = "flex";
+                document.getElementById("scoreRow").style.display = "flex";
+                currentScreen = "practice";
+                updateBottomBarVisibility();
+                renderMonologueSection();
+            } else {
+                // Existing dialogue restart
+                pos = 0;
+                revealed = false;
+                gotIt = 0;
+                missed = 0;
+                missedSet = new Set();
+                updateScore();
+                document.getElementById("done").style.display = "none";
+                document.getElementById("practice").style.display = "flex";
+                document.getElementById("scoreRow").style.display = cueMode ? "flex" : "none";
+                currentScreen = "practice";
+                updateBottomBarVisibility();
+                renderCurrent();
+            }
         }
 
         function reshuffle() {
-            order = buildOrder();
-            pos = 0;
-            revealed = false;
-            document.getElementById("done").style.display = "none";
-            document.getElementById("practice").style.display = "flex";
-            currentScreen = "practice";
-            updateBottomBarVisibility();
-            renderCurrent();
+            if (isMonologueMode) {
+                // Cycle through difficulty levels: 0 → 1 → 2 → 4 → 0
+                // Skip level 3 (Minimal Cues) for now
+                const levels = [0, 1, 2, 4];
+                const currentIdx = levels.indexOf(currentMonologueLevel);
+                const nextIdx = (currentIdx + 1) % levels.length;
+                currentMonologueLevel = levels[nextIdx];
+
+                sectionPos = 0;
+                revealed = false;
+                monologueHintLevel = 0;
+
+                // Update button label
+                const levelNames = ["Read Mode", "Partial Recall", "First-Word Cues", "Minimal Cues", "Full Recall"];
+                const reshuffleBtn = document.getElementById("reshuffleBtn");
+                if (reshuffleBtn) {
+                    reshuffleBtn.textContent = levelNames[currentMonologueLevel];
+                }
+
+                renderMonologueSection();
+            } else {
+                // Existing dialogue reshuffle
+                order = buildOrder();
+                pos = 0;
+                revealed = false;
+                document.getElementById("done").style.display = "none";
+                document.getElementById("practice").style.display = "flex";
+                currentScreen = "practice";
+                updateBottomBarVisibility();
+                renderCurrent();
+            }
         }
 
         function backToSetup() {
@@ -3441,9 +4270,9 @@
             if (e.code === "Space" || e.code === "Enter") {
                 e.preventDefault();
                 handlePress();
-            } else if (e.key.toLowerCase() === "g" && cueMode) {
+            } else if (e.key.toLowerCase() === "g" && (cueMode || isMonologueMode)) {
                 markScore(true);
-            } else if (e.key.toLowerCase() === "m" && cueMode) {
+            } else if (e.key.toLowerCase() === "m" && (cueMode || isMonologueMode)) {
                 markScore(false);
             } else if (e.key.toLowerCase() === "h") {
                 hideAgain();
