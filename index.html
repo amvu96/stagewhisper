@@ -3855,6 +3855,14 @@
                 return;
             }
 
+            // Restore dialogue mode styles (in case switching from monologue)
+            const lineText = document.getElementById("lineText");
+            if (lineText) {
+                lineText.style.display = ""; // Clear inline style to restore CSS flex
+                lineText.style.whiteSpace = "";
+                lineText.style.wordWrap = "";
+            }
+
             if (pos >= order.length) {
                 showDone();
                 return;
@@ -3864,7 +3872,7 @@
             document.getElementById("progressText").textContent = `LINE ${pos+1} / ${total}`;
             document.getElementById("progressFill").style.width = `${(pos/total)*100}%`;
             document.getElementById("charName").textContent = line.character ? line.character : "";
-            document.getElementById("lineText").style.fontSize = fontSize + "rem";
+            lineText.style.fontSize = fontSize + "rem";
 
             const sceneBanner = document.getElementById("sceneBanner");
             if (line.sceneStart) {
@@ -3939,6 +3947,9 @@
             const aiHintBtn = document.getElementById("aiHintBtn");
             const aiHintEl = document.getElementById("aiHintText");
             if (aiHintRow && aiHintBtn && aiHintEl) {
+                // Clear any inline display styles from monologue mode
+                aiHintRow.style.display = "";
+
                 const hintText = aiMode && mine && currentHints ? currentHints[order[pos]] : null;
                 currentHintText = hintText;
                 aiHintRevealed = false;
