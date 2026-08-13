@@ -101,7 +101,7 @@
             align-items: center;
         }
         .side-col {
-            width: 340px;
+            width: 420px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
@@ -167,6 +167,23 @@
         }
         .side-col .panel-body::-webkit-scrollbar-thumb:hover,
         .tts-panel-inner .panel-body::-webkit-scrollbar-thumb:hover {
+            background: var(--muted);
+        }
+        textarea {
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
             background: var(--muted);
         }
         .account-bar {
