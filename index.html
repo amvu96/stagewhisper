@@ -1150,6 +1150,12 @@
         #done h2 {
             color: var(--neon);
         }
+        .scene-row-wrap {
+            position: relative;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
         .scene-row {
             display: flex;
             align-items: center;
@@ -1158,12 +1164,49 @@
             border: 1px solid var(--border);
             border-radius: 6px;
             padding: 10px 12px 10px 4px;
-            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+            touch-action: pan-y;
+            transition: transform 0.2s ease;
         }
         .scene-row.dragging {
             opacity: 0.6;
             border-color: var(--neon-dim);
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        }
+        .scene-row.swiping {
+            transition: none;
+        }
+        .scene-swipe-panel {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: stretch;
+            gap: 6px;
+            padding: 0 8px;
+            z-index: 1;
+        }
+        .scene-swipe-panel.left {
+            left: 0;
+        }
+        .scene-swipe-panel.right {
+            right: 0;
+        }
+        .scene-swipe-panel button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 14px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+        .scene-swipe-panel button.del {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .scene-swipe-panel button.del:hover {
+            background: rgba(255, 95, 109, 0.1);
         }
         .scene-rows {
             display: flex;
@@ -1230,13 +1273,6 @@
         .scene-actions button {
             padding: 6px 8px;
             font-size: 0.76rem;
-        }
-        .scene-actions button.del {
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-        .scene-actions button.del:hover {
-            background: rgba(255, 95, 109, 0.1);
         }
         .storage-warning {
             color: var(--danger);
@@ -3435,6 +3471,9 @@
         }
 
         function renderSceneList() {
+            // Any previously-open swipe panel references a DOM node that's
+            // about to be destroyed and rebuilt below.
+            sceneSwipeOpenWrap = null;
             const data = loadScreenplays();
             const plays = Object.keys(data);
             const list = document.getElementById("sceneList");
@@ -3514,7 +3553,15 @@
                         (scene.staging.arrows && scene.staging.arrows.length)
                     );
                     const stagingBadge = hasStaging ? `<span class="ai-badge" title="Has a staging diagram" aria-label="Has a staging diagram">STG</span>` : "";
-                    html += `<div class="scene-row" data-scene="${escapeAttr(name)}">
+                    html += `<div class="scene-row-wrap" data-scene="${escapeAttr(name)}">
+                <div class="scene-swipe-panel left" aria-hidden="true">
+                  <button onclick="closeSceneSwipe(this);openStagingForSavedScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Open staging diagram" aria-label="Open staging diagram">Staging</button>
+                  <button onclick="closeSceneSwipe(this);shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">Share</button>
+                </div>
+                <div class="scene-swipe-panel right" aria-hidden="true">
+                  <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">Delete</button>
+                </div>
+                <div class="scene-row" data-scene="${escapeAttr(name)}">
                 ${draggable ? `<span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span>` : ""}
                 <div class="scene-info">
                   <div class="name">${escapeHtml(name)}${aiBadge}${stagingBadge}</div>
@@ -3522,11 +3569,8 @@
                 </div>
                 <div class="scene-actions">
                   <button onclick="loadScene('${escapeAttr(play)}','${escapeAttr(name)}')">Load</button>
-                  <button onclick="event.stopPropagation();openStagingForSavedScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Open staging diagram" aria-label="Open staging diagram">▭↗</button>
-                  <button onclick="event.stopPropagation();shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">↗</button>
-                  <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">&times;</button>
                 </div>
-              </div>`;
+              </div></div>`;
                 });
                 html += `</div></div>`;
             });
@@ -3534,6 +3578,7 @@
             list.innerHTML = html;
             noMatches.style.display = (term && !anyRendered) ? "block" : "none";
             attachDragHandlers();
+            attachSceneSwipeHandlers();
         }
 
         let dragCtx = null;
@@ -3546,7 +3591,7 @@
 
         function onDragHandleDown(e) {
             const handle = e.currentTarget;
-            const row = handle.closest(".scene-row");
+            const row = handle.closest(".scene-row-wrap");
             const container = row && row.closest(".scene-rows");
             if (!row || !container) return;
             e.preventDefault();
@@ -3580,7 +3625,7 @@
                 }
             }
 
-            const siblings = Array.from(container.querySelectorAll(".scene-row")).filter(el => el !== row);
+            const siblings = Array.from(container.querySelectorAll(".scene-row-wrap")).filter(el => el !== row);
             let target = null;
             for (const sib of siblings) {
                 const rect = sib.getBoundingClientRect();
@@ -3609,7 +3654,7 @@
             document.removeEventListener("pointerup", endDrag);
             document.removeEventListener("pointercancel", endDrag);
 
-            const newOrder = Array.from(container.querySelectorAll(".scene-row")).map(r => r.dataset.scene);
+            const newOrder = Array.from(container.querySelectorAll(".scene-row-wrap")).map(r => r.dataset.scene);
             const data = loadScreenplays();
             if (data[play]) {
                 data[play].__order = newOrder;
@@ -3617,6 +3662,158 @@
             }
             dragCtx = null;
         }
+
+        /* ---------------- Scene row swipe actions ---------------- */
+        // Swipe the row LEFT to reveal the right-side panel (Delete).
+        // Swipe the row RIGHT to reveal the left-side panel (Staging, Share).
+        // Only one row stays open at a time; opening a new one or tapping
+        // elsewhere closes any previously-open row.
+        let sceneSwipeCtx = null;
+        let sceneSwipeOpenWrap = null; // the currently-revealed .scene-row-wrap, if any
+
+        function attachSceneSwipeHandlers() {
+            document.querySelectorAll(".scene-row").forEach(row => {
+                row.addEventListener("pointerdown", onSceneSwipeDown);
+            });
+        }
+
+        function onSceneSwipeDown(e) {
+            // Ignore drags that start on the reorder handle or on a button —
+            // those have their own handlers (reorder drag, Load button).
+            if (e.target.closest(".drag-handle") || e.target.closest("button")) return;
+
+            const row = e.currentTarget;
+            const wrap = row.closest(".scene-row-wrap");
+            if (!wrap) return;
+
+            const leftPanel = wrap.querySelector(".scene-swipe-panel.left");
+            const rightPanel = wrap.querySelector(".scene-swipe-panel.right");
+            const leftWidth = leftPanel ? leftPanel.getBoundingClientRect().width : 0;
+            const rightWidth = rightPanel ? rightPanel.getBoundingClientRect().width : 0;
+
+            // Starting offset: 0 if closed, or the fully-open offset if this
+            // row was already open (lets you drag it further shut in one go).
+            const currentOpenOffset = wrap === sceneSwipeOpenWrap ? sceneSwipeCtx?.lastOffset || 0 : 0;
+
+            sceneSwipeCtx = {
+                row,
+                wrap,
+                pointerId: e.pointerId,
+                startX: e.clientX,
+                startY: e.clientY,
+                startOffset: currentOpenOffset,
+                lastOffset: currentOpenOffset,
+                leftWidth,
+                rightWidth,
+                isHorizontal: null // decided once movement exceeds a small threshold
+            };
+
+            document.addEventListener("pointermove", onSceneSwipeMove);
+            document.addEventListener("pointerup", onSceneSwipeUp);
+            document.addEventListener("pointercancel", onSceneSwipeCancel);
+        }
+
+        function onSceneSwipeMove(e) {
+            if (!sceneSwipeCtx) return;
+            const ctx = sceneSwipeCtx;
+            const dx = e.clientX - ctx.startX;
+            const dy = e.clientY - ctx.startY;
+
+            if (ctx.isHorizontal === null) {
+                const DECIDE_THRESHOLD = 8;
+                if (Math.abs(dx) < DECIDE_THRESHOLD && Math.abs(dy) < DECIDE_THRESHOLD) return;
+                // Once movement is clearly more vertical than horizontal, bail
+                // out entirely so the list can scroll normally.
+                ctx.isHorizontal = Math.abs(dx) > Math.abs(dy);
+                if (!ctx.isHorizontal) {
+                    sceneSwipeCtx = null;
+                    document.removeEventListener("pointermove", onSceneSwipeMove);
+                    document.removeEventListener("pointerup", onSceneSwipeUp);
+                    document.removeEventListener("pointercancel", onSceneSwipeCancel);
+                    return;
+                }
+                try { ctx.row.setPointerCapture(ctx.pointerId); } catch (err) {}
+                ctx.row.classList.add("swiping");
+                // Closing any other open row as soon as we commit to a horizontal swipe.
+                if (sceneSwipeOpenWrap && sceneSwipeOpenWrap !== ctx.wrap) {
+                    closeSceneSwipeWrap(sceneSwipeOpenWrap);
+                }
+            }
+
+            e.preventDefault();
+            let offset = ctx.startOffset + dx;
+            // Clamp: can't drag further right than the left panel's width,
+            // or further left than the negative right panel's width.
+            offset = Math.max(-ctx.rightWidth, Math.min(ctx.leftWidth, offset));
+            ctx.lastOffset = offset;
+            ctx.row.style.transform = `translateX(${offset}px)`;
+        }
+
+        function onSceneSwipeUp() {
+            if (!sceneSwipeCtx) return;
+            const ctx = sceneSwipeCtx;
+            cleanupSceneSwipeListeners();
+            if (!ctx.isHorizontal) { sceneSwipeCtx = null; return; }
+
+            ctx.row.classList.remove("swiping");
+
+            const OPEN_THRESHOLD_RATIO = 0.4; // fraction of panel width needed to snap open
+            let finalOffset = 0;
+            if (ctx.lastOffset > 0 && ctx.leftWidth > 0 && ctx.lastOffset > ctx.leftWidth * OPEN_THRESHOLD_RATIO) {
+                finalOffset = ctx.leftWidth;
+            } else if (ctx.lastOffset < 0 && ctx.rightWidth > 0 && -ctx.lastOffset > ctx.rightWidth * OPEN_THRESHOLD_RATIO) {
+                finalOffset = -ctx.rightWidth;
+            }
+
+            ctx.row.style.transform = `translateX(${finalOffset}px)`;
+            ctx.lastOffset = finalOffset;
+
+            if (finalOffset === 0) {
+                if (sceneSwipeOpenWrap === ctx.wrap) sceneSwipeOpenWrap = null;
+            } else {
+                sceneSwipeOpenWrap = ctx.wrap;
+            }
+
+            sceneSwipeCtx = null;
+        }
+
+        function onSceneSwipeCancel() {
+            if (!sceneSwipeCtx) return;
+            const ctx = sceneSwipeCtx;
+            cleanupSceneSwipeListeners();
+            ctx.row.classList.remove("swiping");
+            // Snap back to wherever it was before this gesture started.
+            ctx.row.style.transform = `translateX(${ctx.startOffset}px)`;
+            sceneSwipeCtx = null;
+        }
+
+        function cleanupSceneSwipeListeners() {
+            document.removeEventListener("pointermove", onSceneSwipeMove);
+            document.removeEventListener("pointerup", onSceneSwipeUp);
+            document.removeEventListener("pointercancel", onSceneSwipeCancel);
+        }
+
+        function closeSceneSwipeWrap(wrap) {
+            if (!wrap) return;
+            const row = wrap.querySelector(".scene-row");
+            if (row) row.style.transform = "translateX(0px)";
+            if (sceneSwipeOpenWrap === wrap) sceneSwipeOpenWrap = null;
+        }
+
+        // Called by the swipe-panel action buttons themselves (via `this`)
+        // so tapping Staging/Share/Delete also closes the row afterward.
+        function closeSceneSwipe(buttonEl) {
+            const wrap = buttonEl.closest(".scene-row-wrap");
+            closeSceneSwipeWrap(wrap);
+        }
+
+        // Tapping anywhere outside the currently-open swipe row closes it —
+        // e.g. tapping "Load" on a different row, or tapping empty space.
+        document.addEventListener("pointerdown", (e) => {
+            if (!sceneSwipeOpenWrap) return;
+            if (e.target.closest(".scene-row-wrap") === sceneSwipeOpenWrap) return;
+            closeSceneSwipeWrap(sceneSwipeOpenWrap);
+        });
 
         function exportScenes() {
             const data = loadScreenplays();
