@@ -21,6 +21,8 @@
     <meta name="apple-mobile-web-app-title" content="Stage Whisper">
     <link rel="icon" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js" defer></script>
     <style>
         :root {
             --bg: #0a0e0f;
@@ -699,6 +701,43 @@
         .ai-modal-actions button {
             flex: 1;
         }
+        .share-qr-box {
+            display: flex;
+            justify-content: center;
+            padding: 16px;
+            background: #fff;
+            border-radius: 8px;
+            margin: 14px 0;
+        }
+        .share-qr-box img,
+        .share-qr-box canvas {
+            display: block;
+        }
+        .share-status {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+        .scan-video-wrap {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            margin: 14px 0;
+        }
+        .scan-video-wrap video {
+            width: 100%;
+            display: block;
+        }
+        .scan-video-wrap .scan-frame {
+            position: absolute;
+            inset: 15%;
+            border: 2px solid var(--neon);
+            border-radius: 8px;
+            pointer-events: none;
+        }
         .ai-badge {
             display: inline-flex;
             align-items: center;
@@ -1064,8 +1103,8 @@
             flex-shrink: 0;
         }
         .scene-actions button {
-            padding: 6px 10px;
-            font-size: 0.8rem;
+            padding: 6px 8px;
+            font-size: 0.76rem;
         }
         .scene-actions button.del {
             border-color: var(--danger);
@@ -1176,6 +1215,7 @@
                 <label>Your character name (optional, enables cue mode)</label>
                 <input type="text" id="myChar" placeholder="e.g. JULIET">
                 <div class="hint">When set, everyone else's lines auto-display as your cue — only <i>your</i> lines stay hidden until you press the button.</div>
+                <div class="hint" style="margin-bottom:16px;">&nbsp;</div>
 
                 <!-- Monologue section preview (hidden by default) -->
                 <div id="monologueSectionPreview" style="display:none;">
@@ -1337,6 +1377,7 @@
                     <div class="row" style="margin-top:14px;">
                         <button onclick="exportScenes()" style="flex:1;">Export</button>
                         <button onclick="document.getElementById('importFile').click()" style="flex:1;">Import</button>
+                        <button onclick="openScanModal()" style="flex:1;">Scan</button>
                     </div>
                     <input type="file" id="importFile" accept="application/json,.json" style="display:none;" onchange="importScenesFile(event)">
                     <input type="text" id="sceneSearch" placeholder="Search screenplays or scenes…" style="margin-top:14px;" oninput="renderSceneList()">
@@ -1400,6 +1441,35 @@
         </div>
     </div>
 
+    <div class="ai-modal" id="shareModal" onclick="if(event.target===this) closeShareModal()">
+        <div class="ai-modal-inner" style="max-width:400px;">
+            <h3>Share Scene</h3>
+            <div id="shareModalBody">
+                <div class="share-status" id="shareStatusText">Preparing share…</div>
+            </div>
+            <div class="ai-modal-actions" style="margin-top:14px;">
+                <button class="del" id="shareDeleteBtn" onclick="deleteActiveShare()" style="display:none;">Stop Sharing</button>
+                <button onclick="closeShareModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ai-modal" id="scanModal" onclick="if(event.target===this) closeScanModal()">
+        <div class="ai-modal-inner" style="max-width:420px;">
+            <h3>Scan Share Code</h3>
+            <div class="share-status" id="scanStatusText">Point your camera at the QR code.</div>
+            <div class="scan-video-wrap">
+                <video id="scanVideo" playsinline muted></video>
+                <div class="scan-frame"></div>
+            </div>
+            <canvas id="scanCanvas" style="display:none;"></canvas>
+            <div class="hint">No camera, or scanning not working? Ask the sender for the link instead and open it directly.</div>
+            <div class="ai-modal-actions" style="margin-top:14px;">
+                <button onclick="closeScanModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="ai-modal" id="aiSettingsModal">
         <div class="ai-modal-inner">
             <h3>AI Mode Settings</h3>
@@ -1449,7 +1519,8 @@
 
                     <label style="display:block;font-size:0.8rem;color:var(--cyan);margin:18px 0 6px;text-transform:uppercase;">Current Scene</label>
                     <div class="hint" style="margin-bottom:8px;">Force-regenerate hints for whatever script is currently loaded (setup or practice), overwriting any saved cache.</div>
-                    <button style="width:100%;" onclick="regenerateCurrentSceneHints()">Regenerate Hints For Current Scene</button>
+                    <div class="hint" style="margin-bottom:16px;">Requires your character name and script to already be filled in on the setup screen.</div>
+                    <button style="width:100%; margin-bottom:16px;" onclick="regenerateCurrentSceneHints()">Regenerate Hints For Current Scene</button>
                 </div>
 
                 <div class="ai-modal-col ai-modal-col-right">
@@ -2142,12 +2213,18 @@
                                Array.from(document.querySelectorAll('label')).find(l =>
                                    l.textContent.includes('Your character name'));
             const myCharInput = document.getElementById('myChar');
-            const myCharHint = myCharInput?.nextElementSibling;
 
             if (myCharLabel) myCharLabel.style.display = active ? 'none' : 'block';
             if (myCharInput) myCharInput.style.display = active ? 'none' : 'block';
-            if (myCharHint && myCharHint.classList.contains('hint')) {
-                myCharHint.style.display = active ? 'none' : 'block';
+            // Hide every .hint div between myChar's input and the monologue preview block,
+            // not just the immediate next sibling, so adding/removing hint text here can't
+            // leave a stray hint visible (or the WIP monologue block showing) on load.
+            let sib = myCharInput?.nextElementSibling;
+            while (sib && sib.id !== 'monologueSectionPreview') {
+                if (sib.classList.contains('hint')) {
+                    sib.style.display = active ? 'none' : 'block';
+                }
+                sib = sib.nextElementSibling;
             }
 
             // Show/hide section preview
@@ -2753,6 +2830,7 @@
                 </div>
                 <div class="scene-actions">
                   <button onclick="loadScene('${escapeAttr(play)}','${escapeAttr(name)}')">Load</button>
+                  <button onclick="event.stopPropagation();shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">Share</button>
                   <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">&times;</button>
                 </div>
               </div>`;
@@ -2896,43 +2974,256 @@
                     incoming = imported;
                 }
 
-                const existing = loadScreenplays();
-                const collisions = [];
-                Object.keys(incoming).forEach(play => {
-                    Object.keys(incoming[play]).filter(n => n !== "__order").forEach(name => {
-                        if (existing[play] && existing[play][name]) collisions.push(`${play} / ${name}`);
-                    });
-                });
-                if (collisions.length > 0) {
-                    const ok = confirm(
-                        `${collisions.length} scene(s) share a name with ones you already have and will be overwritten:\n${collisions.slice(0,8).join("\n")}${collisions.length>8 ? "\n…" : ""}\n\nContinue?`
-                        );
-                    if (!ok) { event.target.value = ""; return; }
-                }
-
-                let sceneCount = 0;
-                Object.keys(incoming).forEach(play => {
-                    if (!existing[play]) existing[play] = {};
-                    const existingOrder = getSceneNames(existing[play]);
-                    const incomingOrder = getSceneNames(incoming[play]);
-                    Object.assign(existing[play], incoming[play]);
-                    const combinedOrder = existingOrder.slice();
-                    incomingOrder.forEach(n => { if (!combinedOrder.includes(n)) combinedOrder.push(n); });
-                    existing[play].__order = combinedOrder;
-                    sceneCount += incomingOrder.filter(n => n !== "__order").length;
-                });
-                const saved = saveScreenplays(existing);
-                renderSceneList();
-                if (saved) {
-                    alert(`Imported ${sceneCount} scene(s) across ${Object.keys(incoming).length} screenplay(s).`);
-                } else {
-                    alert(
-                        `Imported ${sceneCount} scene(s), but your browser's storage is full — none of this import was permanently saved. It'll stay available for the rest of this session only. Try exporting what you can, deleting some older screenplays, and importing again in smaller batches.`
-                        );
-                }
+                mergeIncomingScenes(incoming);
                 event.target.value = "";
             };
             reader.readAsText(file);
+        }
+
+        // Shared merge step used by both file import and QR-share import.
+        // `incoming` must already be in the { [play]: { [scene]: {...} } } shape.
+        // Returns true if the merge completed (even with a storage warning), false if the user cancelled.
+        function mergeIncomingScenes(incoming) {
+            const existing = loadScreenplays();
+            const collisions = [];
+            Object.keys(incoming).forEach(play => {
+                Object.keys(incoming[play]).filter(n => n !== "__order").forEach(name => {
+                    if (existing[play] && existing[play][name]) collisions.push(`${play} / ${name}`);
+                });
+            });
+            if (collisions.length > 0) {
+                const ok = confirm(
+                    `${collisions.length} scene(s) share a name with ones you already have and will be overwritten:\n${collisions.slice(0,8).join("\n")}${collisions.length>8 ? "\n…" : ""}\n\nContinue?`
+                    );
+                if (!ok) return false;
+            }
+
+            let sceneCount = 0;
+            Object.keys(incoming).forEach(play => {
+                if (!existing[play]) existing[play] = {};
+                const existingOrder = getSceneNames(existing[play]);
+                const incomingOrder = getSceneNames(incoming[play]);
+                Object.assign(existing[play], incoming[play]);
+                const combinedOrder = existingOrder.slice();
+                incomingOrder.forEach(n => { if (!combinedOrder.includes(n)) combinedOrder.push(n); });
+                existing[play].__order = combinedOrder;
+                sceneCount += incomingOrder.filter(n => n !== "__order").length;
+            });
+            const saved = saveScreenplays(existing);
+            renderSceneList();
+            if (saved) {
+                alert(`Imported ${sceneCount} scene(s) across ${Object.keys(incoming).length} screenplay(s).`);
+            } else {
+                alert(
+                    `Imported ${sceneCount} scene(s), but your browser's storage is full — none of this import was permanently saved. It'll stay available for the rest of this session only. Try exporting what you can, deleting some older screenplays, and importing again in smaller batches.`
+                    );
+            }
+            return true;
+        }
+
+        // ---- Share a single scene via QR code ----
+        let activeShareId = null;
+
+        function makeShareId() {
+            // 22 random base36 chars — long enough that guessing a live share is impractical.
+            const bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return Array.from(bytes, b => b.toString(36).padStart(2, "0")).join("").slice(0, 22);
+        }
+
+        async function shareScene(play, name) {
+            if (!window.swCurrentUser || !window.swCreateShare) {
+                alert("Sign in with Google first — sharing a scene needs an account so you can manage (and delete) the share afterward.");
+                return;
+            }
+            const data = loadScreenplays();
+            const scene = data[play] && data[play][name];
+            if (!scene) {
+                alert("Couldn't find that scene.");
+                return;
+            }
+
+            openShareModal();
+            const statusEl = document.getElementById("shareStatusText");
+            const bodyEl = document.getElementById("shareModalBody");
+            const deleteBtn = document.getElementById("shareDeleteBtn");
+            statusEl.textContent = "Preparing share…";
+            deleteBtn.style.display = "none";
+
+            try {
+                const shareId = makeShareId();
+                await window.swCreateShare(shareId, window.swCurrentUser.uid, play, name, scene);
+                activeShareId = shareId;
+
+                const shareUrl = `${location.origin}${location.pathname}?share=${shareId}`;
+                bodyEl.innerHTML = `
+                    <div class="share-status">${escapeHtml(play)} — ${escapeHtml(name)}</div>
+                    <div class="share-qr-box" id="shareQrBox"></div>
+                    <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
+                    <div class="hint" style="margin-top:10px;">Anyone with this QR code or link can add this scene to their own saved scenes — no account needed on their end. Tap "Stop Sharing" below once they've got it.</div>
+                `;
+                renderShareQr(shareUrl);
+                deleteBtn.style.display = "block";
+            } catch (e) {
+                console.error("Failed to create share", e);
+                statusEl.textContent = "";
+                bodyEl.innerHTML = `<div class="hint">Couldn't create the share link. ${escapeHtml((e && e.message) || "Unknown error.")}</div>`;
+            }
+        }
+
+        function renderShareQr(text) {
+            const box = document.getElementById("shareQrBox");
+            if (!box || typeof QRCode === "undefined") {
+                if (box) box.innerHTML = `<div class="hint">QR library didn't load — use the link above instead.</div>`;
+                return;
+            }
+            box.innerHTML = "";
+            new QRCode(box, {
+                text,
+                width: 220,
+                height: 220,
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
+        function openShareModal() {
+            document.getElementById("shareModal").classList.add("open");
+        }
+
+        function closeShareModal() {
+            document.getElementById("shareModal").classList.remove("open");
+            document.getElementById("shareModalBody").innerHTML =
+                `<div class="share-status" id="shareStatusText">Preparing share…</div>`;
+            // Deliberately leave activeShareId as-is — closing the modal shouldn't
+            // silently kill a share someone else hasn't scanned yet.
+        }
+
+        async function deleteActiveShare() {
+            if (!activeShareId) { closeShareModal(); return; }
+            if (!confirm("Stop sharing this scene? The QR code and link will stop working.")) return;
+            try {
+                await window.swDeleteShare(activeShareId);
+            } catch (e) {
+                console.error("Failed to delete share", e);
+                alert("Couldn't delete the share (it may already be gone): " + ((e && e.message) || "unknown error"));
+            }
+            activeShareId = null;
+            closeShareModal();
+        }
+
+        // ---- Import a shared scene, from a scanned QR or a ?share= link ----
+        async function importShareById(shareId) {
+            if (!window.swGetShare) {
+                alert("Sharing isn't available right now — try again in a moment.");
+                return;
+            }
+            try {
+                const share = await window.swGetShare(shareId);
+                if (!share) {
+                    alert("This share link is no longer valid — it may have already been stopped by the sender.");
+                    return;
+                }
+                const playName = share.play || "Shared Scenes";
+                const sceneName = share.scene || "Shared Scene";
+                const incoming = { [playName]: { [sceneName]: share.data } };
+                const ok = confirm(`Import "${sceneName}" from "${playName}"?`);
+                if (!ok) return;
+                mergeIncomingScenes(incoming);
+            } catch (e) {
+                console.error("Failed to import share", e);
+                alert("Couldn't fetch that shared scene: " + ((e && e.message) || "unknown error"));
+            }
+        }
+
+        // ---- QR scanner (camera) ----
+        let scanStream = null;
+        let scanRafId = null;
+
+        async function openScanModal() {
+            document.getElementById("scanModal").classList.add("open");
+            const statusEl = document.getElementById("scanStatusText");
+            const video = document.getElementById("scanVideo");
+            statusEl.textContent = "Point your camera at the QR code.";
+
+            if (typeof jsQR === "undefined") {
+                statusEl.textContent = "Scanner library didn't load — ask for the link instead and open it directly.";
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusEl.textContent = "Camera access isn't available in this browser — ask for the link instead.";
+                return;
+            }
+
+            try {
+                scanStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                video.srcObject = scanStream;
+                await video.play();
+                scanLoop();
+            } catch (e) {
+                console.error("Camera access failed", e);
+                statusEl.textContent = "Couldn't access the camera — check permissions, or ask for the link instead.";
+            }
+        }
+
+        function closeScanModal() {
+            document.getElementById("scanModal").classList.remove("open");
+            if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+            if (scanStream) {
+                scanStream.getTracks().forEach(t => t.stop());
+                scanStream = null;
+            }
+        }
+
+        function scanLoop() {
+            const video = document.getElementById("scanVideo");
+            const canvas = document.getElementById("scanCanvas");
+            if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
+                scanRafId = requestAnimationFrame(scanLoop);
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code && code.data) {
+                handleScannedText(code.data);
+                return; // stop the loop; handleScannedText closes the modal
+            }
+            scanRafId = requestAnimationFrame(scanLoop);
+        }
+
+        function handleScannedText(text) {
+            closeScanModal();
+            let shareId = null;
+            try {
+                const url = new URL(text);
+                shareId = url.searchParams.get("share");
+            } catch (e) {
+                // Not a URL — maybe they encoded a bare share ID.
+                shareId = text.trim();
+            }
+            if (!shareId) {
+                alert("That QR code doesn't look like a Stage Whisper share code.");
+                return;
+            }
+            importShareById(shareId);
+        }
+
+        // Handle opening a share link directly (e.g. tapped from a text/email,
+        // or scanned with the phone's native camera app instead of in-app scanning).
+        function checkUrlForShare() {
+            const params = new URLSearchParams(location.search);
+            const shareId = params.get("share");
+            if (!shareId) return;
+            // Strip the param so a refresh doesn't re-prompt.
+            const cleanUrl = location.origin + location.pathname;
+            history.replaceState({}, "", cleanUrl);
+            importShareById(shareId);
         }
 
         function escapeHtml(s) {
@@ -3638,7 +3929,7 @@
                     </div>`;
                 } else {
                     recommendation = `<div style="margin-top:20px; padding:16px; background:var(--panel); border-radius:6px; border-left:4px solid var(--neon); text-align:left;">
-                        <div style="font-size:0.9rem; color:var(--neon; margin-bottom:4px;">🎉 Excellent!</div>
+                        <div style="font-size:0.9rem; color:var(--neon); margin-bottom:4px;">🎉 Excellent!</div>
                         <div style="font-size:0.95rem;">All sections mastered!</div>
                     </div>`;
                 }
@@ -4181,8 +4472,25 @@
             setTheme(document.documentElement.getAttribute("data-theme") || "dark");
             lockPortraitIfPossible();
             disablePullToRefresh();
+            waitForShareApiThenCheckUrl();
         });
         window.addEventListener("resize", updateBottomBarVisibility);
+
+        // The Firestore helpers (swGetShare etc.) come from a type="module" script
+        // that loads/executes after this one, so poll briefly rather than calling
+        // checkUrlForShare() immediately and finding it undefined.
+        function waitForShareApiThenCheckUrl(attemptsLeft) {
+            if (attemptsLeft === undefined) attemptsLeft = 40; // ~10s at 250ms
+            if (window.swGetShare) {
+                checkUrlForShare();
+                return;
+            }
+            if (attemptsLeft <= 0) {
+                checkUrlForShare(); // will show a clear error if a ?share= link is present
+                return;
+            }
+            setTimeout(() => waitForShareApiThenCheckUrl(attemptsLeft - 1), 250);
+        }
 
         function lockPortraitIfPossible() {
             try {
@@ -4391,7 +4699,7 @@
             indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence
         } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
         import {
-            getFirestore, doc, getDoc, setDoc, collection, getDocs, serverTimestamp
+            getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -4504,6 +4812,32 @@
             const arr = [];
             snap.forEach(d => arr.push(d.data()));
             return arr;
+        };
+
+        // ---- Scene sharing (public, expiry-free — creator deletes when done) ----
+        // Requires a Firestore rule like:
+        //   match /shares/{shareId} {
+        //     allow read: if true;
+        //     allow create: if request.auth != null;
+        //     allow delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
+        //   }
+        window.swCreateShare = async function(shareId, uid, playName, sceneName, sceneData) {
+            await setDoc(doc(db, "shares", shareId), {
+                createdBy: uid,
+                play: playName,
+                scene: sceneName,
+                data: sceneData,
+                createdAt: serverTimestamp()
+            });
+        };
+
+        window.swGetShare = async function(shareId) {
+            const snap = await getDoc(doc(db, "shares", shareId));
+            return snap.exists() ? snap.data() : null;
+        };
+
+        window.swDeleteShare = async function(shareId) {
+            await deleteDoc(doc(db, "shares", shareId));
         };
 
         onAuthStateChanged(auth, (user) => {
