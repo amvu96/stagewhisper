@@ -2830,8 +2830,13 @@
               </div>
               <div class="scene-rows ${isCollapsed ? 'collapsed' : ''}" data-play="${escapeAttr(play)}">`;
                 names.forEach(name => {
-                    const lineCount = scenes[name].script.split("\n").map(r => r.trim()).filter(r => r).length;
-                    const charLabel = scenes[name].myChar ? ` · as ${scenes[name].myChar}` : "";
+                    const scene = scenes[name];
+                    if (!scene || !scene.script) {
+                        console.warn(`Skipping malformed scene: ${play} / ${name}`);
+                        return;
+                    }
+                    const lineCount = scene.script.split("\n").map(r => r.trim()).filter(r => r).length;
+                    const charLabel = scene.myChar ? ` · as ${scene.myChar}` : "";
                     const hasHints = window.swHintsIndex && window.swHintsIndex.has(play + "::" + name);
                     const aiBadge = hasHints ? `<span class="ai-badge" onclick="event.stopPropagation();confirmRegenerateHints('${escapeAttr(play)}','${escapeAttr(name)}')" title="AI hints saved for this scene — tap to regenerate" aria-label="AI hints saved — tap to regenerate">AI</span>` : "";
                     html += `<div class="scene-row" data-scene="${escapeAttr(name)}">
@@ -3078,14 +3083,14 @@
                 <div class="share-status" style="color: var(--cyan); margin-top: 8px;">Already shared</div>
                 <div class="share-qr-box" id="shareQrBox"></div>
                 <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
-                <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
+                <button onclick="copyShareUrl('${escapeAttr(shareUrl)}', event)" style="width:100%;margin-top:10px;">Copy Link</button>
                 <div class="hint" style="margin-top:10px;">This ${isScreenplay ? 'screenplay' : 'scene'} is already being shared. Use the QR code or link above, or tap "Stop Sharing" to remove it.</div>
             `;
             renderShareQr(shareUrl);
             deleteBtn.style.display = "block";
         }
 
-        async function copyShareUrl(url) {
+        async function copyShareUrl(url, event) {
             try {
                 await navigator.clipboard.writeText(url);
                 // Visual feedback
@@ -3145,7 +3150,7 @@
                     <div class="share-status">${escapeHtml(play)} — ${escapeHtml(name)}</div>
                     <div class="share-qr-box" id="shareQrBox"></div>
                     <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
-                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
+                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}', event)" style="width:100%;margin-top:10px;">Copy Link</button>
                     <div class="hint" style="margin-top:10px;">Anyone with this QR code or link can add this scene to their own saved scenes — no account needed on their end. Tap "Stop Sharing" below once they've got it.</div>
                 `;
                 renderShareQr(shareUrl);
@@ -3198,7 +3203,7 @@
                     <div class="share-status">Screenplay: ${escapeHtml(play)}</div>
                     <div class="share-qr-box" id="shareQrBox"></div>
                     <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
-                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
+                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}', event)" style="width:100%;margin-top:10px;">Copy Link</button>
                     <div class="hint" style="margin-top:10px;">Anyone with this QR code or link can add all scenes from this screenplay to their collection. Tap "Stop Sharing" below when done.</div>
                 `;
                 renderShareQr(shareUrl);
