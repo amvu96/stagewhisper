@@ -1454,7 +1454,7 @@
 
     <div class="ai-modal" id="shareModal" onclick="if(event.target===this) closeShareModal()">
         <div class="ai-modal-inner" style="max-width:400px;">
-            <h3>Share Scene</h3>
+            <h3 id="shareModalTitle">Share</h3>
             <div id="shareModalBody">
                 <div class="share-status" id="shareStatusText">Preparing share…</div>
             </div>
@@ -2823,6 +2823,7 @@
                   ${escapeHtml(play)}
                 </span>
                 <div class="header-actions">
+                  <button onclick="event.stopPropagation();shareScreenplay('${escapeAttr(play)}')" title="Share entire screenplay via QR code" aria-label="Share screenplay">Share</button>
                   <button class="play-all-btn" onclick="event.stopPropagation();playAllScenes('${escapeAttr(play)}')" title="Play all scenes from this screenplay" aria-label="Play all scenes">Play All</button>
                   <button class="del" onclick="event.stopPropagation();deleteScreenplay('${escapeAttr(play)}')">&times;</button>
                 </div>
@@ -3034,12 +3035,74 @@
 
         // ---- Share a single scene via QR code ----
         let activeShareId = null;
+        let userSharesCache = null;  // Map of existing shares
+        let sharesCacheExpiry = 0;   // Timestamp for cache invalidation
 
         function makeShareId() {
             // 22 random base36 chars — long enough that guessing a live share is impractical.
             const bytes = new Uint8Array(16);
             crypto.getRandomValues(bytes);
             return Array.from(bytes, b => b.toString(36).padStart(2, "0")).join("").slice(0, 22);
+        }
+
+        async function getExistingShare(play, sceneName = null) {
+            if (!window.swCurrentUser) return null;
+
+            // Refresh cache if expired (cache for 30 seconds)
+            const now = Date.now();
+            if (!userSharesCache || now > sharesCacheExpiry) {
+                try {
+                    userSharesCache = await window.swListUserShares(window.swCurrentUser.uid);
+                    sharesCacheExpiry = now + 30000;
+                } catch (e) {
+                    console.error("Failed to load user shares", e);
+                    return null;
+                }
+            }
+
+            const key = sceneName ? `scene:${play}::${sceneName}` : `screenplay:${play}`;
+            return userSharesCache.get(key) || null;
+        }
+
+        function displayExistingShare(shareData, play, sceneName, isScreenplay) {
+            const statusEl = document.getElementById("shareStatusText");
+            const bodyEl = document.getElementById("shareModalBody");
+            const deleteBtn = document.getElementById("shareDeleteBtn");
+
+            activeShareId = shareData.shareId;
+            const shareUrl = `${location.origin}${location.pathname}?share=${shareData.shareId}`;
+            const titleText = isScreenplay ? `Screenplay: ${escapeHtml(play)}` : `${escapeHtml(play)} — ${escapeHtml(sceneName)}`;
+
+            bodyEl.innerHTML = `
+                <div class="share-status">${titleText}</div>
+                <div class="share-status" style="color: var(--cyan); margin-top: 8px;">Already shared</div>
+                <div class="share-qr-box" id="shareQrBox"></div>
+                <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
+                <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
+                <div class="hint" style="margin-top:10px;">This ${isScreenplay ? 'screenplay' : 'scene'} is already being shared. Use the QR code or link above, or tap "Stop Sharing" to remove it.</div>
+            `;
+            renderShareQr(shareUrl);
+            deleteBtn.style.display = "block";
+        }
+
+        async function copyShareUrl(url) {
+            try {
+                await navigator.clipboard.writeText(url);
+                // Visual feedback
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = "Copied!";
+                btn.style.background = "var(--cyan)";
+                btn.style.color = "#000";
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = "";
+                    btn.style.color = "";
+                }, 2000);
+            } catch (e) {
+                console.error("Failed to copy", e);
+                alert("Couldn't copy to clipboard. Please copy the link manually.");
+            }
         }
 
         async function shareScene(play, name) {
@@ -3054,7 +3117,17 @@
                 return;
             }
 
+            // Check for existing share
+            const existingShare = await getExistingShare(play, name);
+            if (existingShare) {
+                openShareModal();
+                document.getElementById("shareModalTitle").textContent = "Share Scene";
+                displayExistingShare(existingShare, play, name, false);
+                return;
+            }
+
             openShareModal();
+            document.getElementById("shareModalTitle").textContent = "Share Scene";
             const statusEl = document.getElementById("shareStatusText");
             const bodyEl = document.getElementById("shareModalBody");
             const deleteBtn = document.getElementById("shareDeleteBtn");
@@ -3063,15 +3136,70 @@
 
             try {
                 const shareId = makeShareId();
-                await window.swCreateShare(shareId, window.swCurrentUser.uid, play, name, scene);
+                await window.swCreateShare(shareId, window.swCurrentUser.uid, play, name, scene, false);
                 activeShareId = shareId;
+                userSharesCache = null; // Invalidate cache
 
                 const shareUrl = `${location.origin}${location.pathname}?share=${shareId}`;
                 bodyEl.innerHTML = `
                     <div class="share-status">${escapeHtml(play)} — ${escapeHtml(name)}</div>
                     <div class="share-qr-box" id="shareQrBox"></div>
                     <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
+                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
                     <div class="hint" style="margin-top:10px;">Anyone with this QR code or link can add this scene to their own saved scenes — no account needed on their end. Tap "Stop Sharing" below once they've got it.</div>
+                `;
+                renderShareQr(shareUrl);
+                deleteBtn.style.display = "block";
+            } catch (e) {
+                console.error("Failed to create share", e);
+                statusEl.textContent = "";
+                bodyEl.innerHTML = `<div class="hint">Couldn't create the share link. ${escapeHtml((e && e.message) || "Unknown error.")}</div>`;
+            }
+        }
+
+        async function shareScreenplay(play) {
+            if (!window.swCurrentUser || !window.swCreateShare) {
+                alert("Sign in with Google first — sharing needs an account so you can manage (and delete) the share afterward.");
+                return;
+            }
+
+            const data = loadScreenplays();
+            const screenplay = data[play];
+            if (!screenplay) {
+                alert("Couldn't find that screenplay.");
+                return;
+            }
+
+            // Check for existing share
+            const existingShare = await getExistingShare(play, null);
+            if (existingShare) {
+                openShareModal();
+                document.getElementById("shareModalTitle").textContent = "Share Screenplay";
+                displayExistingShare(existingShare, play, null, true);
+                return;
+            }
+
+            openShareModal();
+            document.getElementById("shareModalTitle").textContent = "Share Screenplay";
+            const statusEl = document.getElementById("shareStatusText");
+            const bodyEl = document.getElementById("shareModalBody");
+            const deleteBtn = document.getElementById("shareDeleteBtn");
+            statusEl.textContent = "Preparing share…";
+            deleteBtn.style.display = "none";
+
+            try {
+                const shareId = makeShareId();
+                await window.swCreateShare(shareId, window.swCurrentUser.uid, play, null, screenplay, true);
+                activeShareId = shareId;
+                userSharesCache = null; // Invalidate cache
+
+                const shareUrl = `${location.origin}${location.pathname}?share=${shareId}`;
+                bodyEl.innerHTML = `
+                    <div class="share-status">Screenplay: ${escapeHtml(play)}</div>
+                    <div class="share-qr-box" id="shareQrBox"></div>
+                    <div class="hint" style="text-align:center;word-break:break-all;">${escapeHtml(shareUrl)}</div>
+                    <button onclick="copyShareUrl('${escapeAttr(shareUrl)}')" style="width:100%;margin-top:10px;">Copy Link</button>
+                    <div class="hint" style="margin-top:10px;">Anyone with this QR code or link can add all scenes from this screenplay to their collection. Tap "Stop Sharing" below when done.</div>
                 `;
                 renderShareQr(shareUrl);
                 deleteBtn.style.display = "block";
@@ -3111,9 +3239,10 @@
 
         async function deleteActiveShare() {
             if (!activeShareId) { closeShareModal(); return; }
-            if (!confirm("Stop sharing this scene? The QR code and link will stop working.")) return;
+            if (!confirm("Stop sharing? The QR code and link will stop working.")) return;
             try {
                 await window.swDeleteShare(activeShareId);
+                userSharesCache = null; // Invalidate cache
             } catch (e) {
                 console.error("Failed to delete share", e);
                 alert("Couldn't delete the share (it may already be gone): " + ((e && e.message) || "unknown error"));
@@ -3134,15 +3263,26 @@
                     alert("This share link is no longer valid — it may have already been stopped by the sender.");
                     return;
                 }
+
                 const playName = share.play || "Shared Scenes";
-                const sceneName = share.scene || "Shared Scene";
-                const incoming = { [playName]: { [sceneName]: share.data } };
-                const ok = confirm(`Import "${sceneName}" from "${playName}"?`);
-                if (!ok) return;
-                mergeIncomingScenes(incoming);
+
+                if (share.isScreenplay) {
+                    // Import entire screenplay
+                    const incoming = { [playName]: share.data };
+                    const ok = confirm(`Import screenplay "${playName}" with all its scenes?`);
+                    if (!ok) return;
+                    mergeIncomingScenes(incoming);
+                } else {
+                    // Import single scene
+                    const sceneName = share.scene || "Shared Scene";
+                    const incoming = { [playName]: { [sceneName]: share.data } };
+                    const ok = confirm(`Import "${sceneName}" from "${playName}"?`);
+                    if (!ok) return;
+                    mergeIncomingScenes(incoming);
+                }
             } catch (e) {
                 console.error("Failed to import share", e);
-                alert("Couldn't fetch that shared scene: " + ((e && e.message) || "unknown error"));
+                alert("Couldn't fetch that shared content: " + ((e && e.message) || "unknown error"));
             }
         }
 
@@ -4710,7 +4850,7 @@
             indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence
         } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
         import {
-            getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp
+            getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp, query, where
         } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -4832,12 +4972,13 @@
         //     allow create: if request.auth != null;
         //     allow delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
         //   }
-        window.swCreateShare = async function(shareId, uid, playName, sceneName, sceneData) {
+        window.swCreateShare = async function(shareId, uid, playName, sceneName, sceneData, isScreenplay = false) {
             await setDoc(doc(db, "shares", shareId), {
                 createdBy: uid,
                 play: playName,
-                scene: sceneName,
+                scene: sceneName || null,
                 data: sceneData,
+                isScreenplay: isScreenplay,
                 createdAt: serverTimestamp()
             });
         };
@@ -4849,6 +4990,18 @@
 
         window.swDeleteShare = async function(shareId) {
             await deleteDoc(doc(db, "shares", shareId));
+        };
+
+        window.swListUserShares = async function(uid) {
+            const q = query(collection(db, "shares"), where("createdBy", "==", uid));
+            const snap = await getDocs(q);
+            const shares = new Map();
+            snap.forEach(d => {
+                const data = d.data();
+                const key = data.isScreenplay ? `screenplay:${data.play}` : `scene:${data.play}::${data.scene}`;
+                shares.set(key, { shareId: d.id, ...data });
+            });
+            return shares;
         };
 
         onAuthStateChanged(auth, (user) => {
