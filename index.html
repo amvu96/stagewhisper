@@ -21,8 +21,19 @@
     <meta name="apple-mobile-web-app-title" content="Stage Whisper">
     <link rel="icon" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js" defer></script>
+    <!--
+        Self-hosted, not CDN-loaded: download these two files once and commit them
+        to the repo next to index.html (same folder as manifest.json / sw.js).
+          qrcode.min.js -> https://github.com/davidshimjs/qrcodejs (davidshimjs/qrcodejs, MIT)
+          jsQR.min.js    -> https://github.com/cozmo/jsQR/releases (cozmo/jsQR, Apache-2.0; use the
+                            "dist/jsQR.js" build from a tagged release, e.g. v1.4.0)
+        A CDN dependency here previously broke scanning on every browser at once
+        (Chrome, PWA, and Firefox) when the CDN failed to serve the file — self-hosting
+        removes that single point of failure and lets the service worker cache them
+        like every other asset.
+    -->
+    <script src="qrcode.min.js" defer></script>
+    <script src="jsQR.min.js" defer></script>
     <style>
         :root {
             --bg: #0a0e0f;
