@@ -758,6 +758,74 @@
         .ai-modal-actions button {
             flex: 1;
         }
+        /* ----- Staging diagram (blocking canvas) ----- */
+        .staging-modal-inner {
+            max-width: 720px;
+            width: 100%;
+            margin-top: 6vh;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+        }
+        .staging-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .staging-tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            font-size: 0.8rem;
+        }
+        .staging-tool-btn.active {
+            background: var(--cyan);
+            color: #001417;
+            border-color: var(--cyan);
+        }
+        .staging-color-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            padding: 0;
+        }
+        .staging-color-swatch.active {
+            border-color: var(--fg, #fff);
+            box-shadow: 0 0 0 2px var(--cyan);
+        }
+        .staging-canvas-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            background: var(--input-bg, #0d1315);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .staging-canvas-wrap canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .staging-actions-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .staging-actions-row button {
+            flex: 1;
+            min-width: 100px;
+        }
         .share-qr-box {
             display: flex;
             justify-content: center;
@@ -1349,6 +1417,11 @@
                 </div>
                 <div class="hint">Group scenes under a screenplay so you can keep separate roles — e.g. two characters from the same play — organized and easy to tell apart.</div>
 
+                <div style="margin-top:12px;">
+                    <button type="button" onclick="openStagingModal()" style="width:100%;">Staging Diagram</button>
+                    <div class="hint">Sketch entrances, exits, and blocking for this scene — rectangles, actor points, and numbered movement arrows.</div>
+                </div>
+
                 <div class="mobile-start-btn-wrapper">
                     <button class="primary start-practice-btn" id="startPracticeBtn" onclick="startPractice()" disabled>START PRACTICE</button>
                 </div>
@@ -1379,6 +1452,10 @@
                     <button id="hideBtn" onclick="hideAgain()">Hide Again</button>
                     <button onclick="restart()">Restart</button>
                     <button id="reshuffleBtn" onclick="reshuffle()">Reshuffle</button>
+                </div>
+
+                <div class="controls-row">
+                    <button onclick="openStagingModal()" title="View staging diagram for this scene" aria-label="View staging diagram">Staging</button>
                 </div>
 
                 <div class="score-row" id="scoreRow" style="display:none;">
@@ -1599,6 +1676,34 @@
             </div>
 
             <div id="appVersionText" style="text-align:center; font-size:0.7rem; color:var(--muted); margin-top:14px; opacity:0.6;"></div>
+        </div>
+    </div>
+
+    <div class="ai-modal" id="stagingModal" onclick="if(event.target===this) closeStagingModal()">
+        <div class="staging-modal-inner">
+            <h3 style="margin:0 0 10px;color:var(--cyan);font-size:0.9rem;letter-spacing:1px;text-transform:uppercase;">Staging Diagram</h3>
+
+            <div class="staging-toolbar">
+                <button type="button" class="staging-tool-btn" id="stagingToolRect" onclick="setStagingTool('rect')" title="Draw a rectangle (set piece, mark, etc.)">▭ Rect</button>
+                <button type="button" class="staging-tool-btn" id="stagingToolPoint" onclick="setStagingTool('point')" title="Place an actor point">● Actor</button>
+                <button type="button" class="staging-tool-btn" id="stagingToolArrow" onclick="setStagingTool('arrow')" title="Draw a numbered movement arrow">↗ Arrow</button>
+                <button type="button" class="staging-tool-btn" id="stagingToolDelete" onclick="setStagingTool('delete')" title="Tap a shape to delete it">🗑 Delete</button>
+                <span style="flex:1;"></span>
+                <div id="stagingColorSwatches" style="display:flex;gap:6px;"></div>
+            </div>
+
+            <div class="staging-canvas-wrap" id="stagingCanvasWrap">
+                <canvas id="stagingCanvas"></canvas>
+            </div>
+
+            <div class="hint" style="margin-top:8px;" id="stagingHint">Pick a tool and a color, then draw on the diagram. Arrows are numbered in the order you draw them.</div>
+
+            <div class="staging-actions-row">
+                <button onclick="undoStagingShape()">Undo</button>
+                <button onclick="clearStagingDiagram()">Clear All</button>
+                <button onclick="saveStagingDiagram()">Save</button>
+                <button onclick="closeStagingModal()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -2149,6 +2254,492 @@
                 console.warn("Couldn't read app version from sw.js", e);
             }
         }
+
+        /* ---------------- Staging Diagram (blocking canvas) ---------------- */
+        // Data model (stored per-scene, coordinates as 0-1 fractions of canvas size
+        // so it scales cleanly across devices):
+        //   staging: {
+        //     rects:  [{id, x, y, w, h}],
+        //     points: [{id, x, y, color, label}],
+        //     arrows: [{id, x1, y1, x2, y2, order}]
+        //   }
+        const STAGING_COLORS = ["#ff5566", "#4fd1c5", "#f6c945", "#7c8cff", "#ff9d5c", "#e879f9"];
+
+        let stagingState = { rects: [], points: [], arrows: [] };
+        let stagingTool = null; // 'rect' | 'point' | 'arrow' | null
+        let stagingActiveColor = STAGING_COLORS[0];
+        let stagingCanvas = null;
+        let stagingCtx = null;
+        let stagingUndoStack = [];
+
+        function openStagingModal() {
+            const play = document.getElementById("screenplayName").value.trim();
+            const name = document.getElementById("sceneName").value.trim();
+            if (!play || !name) {
+                alert("Give this scene a screenplay and scene name first (so the staging diagram has somewhere to be saved).");
+                return;
+            }
+
+            const data = loadScreenplays();
+            const existing = data[play] && data[play][name] && data[play][name].staging;
+            stagingState = existing
+                ? JSON.parse(JSON.stringify(existing))
+                : { rects: [], points: [], arrows: [] };
+            stagingUndoStack = [];
+
+            document.getElementById("stagingModal").classList.add("open");
+            initStagingColorSwatches();
+            setStagingTool("point");
+
+            // Canvas needs layout to settle (modal just became visible) before
+            // we can read its real pixel size.
+            requestAnimationFrame(() => {
+                setupStagingCanvas();
+                renderStagingCanvas();
+            });
+        }
+
+        // Entry point from the saved-scenes list: loads the target scene into
+        // the setup form first (so screenplayName/sceneName/staging-save all
+        // line up with the currently-loaded scene, matching how the rest of
+        // the app already treats "the loaded scene" as the source of truth),
+        // then opens the staging modal on top.
+        function openStagingForSavedScene(play, name) {
+            loadScene(play, name);
+            openStagingModal();
+        }
+
+        function closeStagingModal() {
+            document.getElementById("stagingModal").classList.remove("open");
+        }
+
+        function initStagingColorSwatches() {
+            const wrap = document.getElementById("stagingColorSwatches");
+            if (!wrap) return;
+            wrap.innerHTML = "";
+            STAGING_COLORS.forEach(color => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "staging-color-swatch" + (color === stagingActiveColor ? " active" : "");
+                btn.style.background = color;
+                btn.title = "Drawing color";
+                btn.onclick = () => {
+                    stagingActiveColor = color;
+                    initStagingColorSwatches();
+                };
+                wrap.appendChild(btn);
+            });
+        }
+
+        function setStagingTool(tool) {
+            stagingTool = tool;
+            ["rect", "point", "arrow", "delete"].forEach(t => {
+                const btn = document.getElementById("stagingTool" + t.charAt(0).toUpperCase() + t.slice(1));
+                if (btn) btn.classList.toggle("active", t === tool);
+            });
+            const hint = document.getElementById("stagingHint");
+            if (hint) {
+                if (tool === "rect") hint.textContent = "Drag to draw a rectangle in the chosen color (set pieces, marks, furniture).";
+                else if (tool === "point") hint.textContent = "Tap to place a point in the chosen color. Tap an existing point to rename it.";
+                else if (tool === "arrow") hint.textContent = "Drag from start to end to draw a movement arrow in the chosen color — numbered in the order you draw them.";
+                else if (tool === "delete") hint.textContent = "Tap a shape to delete it. Deleting an arrow renumbers the ones after it.";
+            }
+        }
+
+        function setupStagingCanvas() {
+            stagingCanvas = document.getElementById("stagingCanvas");
+            const wrap = document.getElementById("stagingCanvasWrap");
+            if (!stagingCanvas || !wrap) return;
+
+            const rect = wrap.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            stagingCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+            stagingCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+            stagingCtx = stagingCanvas.getContext("2d");
+            stagingCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            attachStagingPointerHandlers();
+        }
+
+        // Converts a pointer event's client coordinates into 0-1 fractions of
+        // the canvas's on-screen size, so stored coordinates are resolution-independent.
+        function stagingEventToFraction(e) {
+            const rect = stagingCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+            return {
+                x: Math.min(1, Math.max(0, x)),
+                y: Math.min(1, Math.max(0, y))
+            };
+        }
+
+        let stagingDragStart = null;   // {x, y} in fractions, set on pointerdown for rect/arrow
+        let stagingDragCurrent = null; // live position while dragging, for preview
+        let stagingPointerHandlersAttached = false;
+
+        function attachStagingPointerHandlers() {
+            if (stagingPointerHandlersAttached) return; // canvas element is stable across resizes
+            stagingPointerHandlersAttached = true;
+
+            stagingCanvas.addEventListener("pointerdown", stagingOnPointerDown);
+            stagingCanvas.addEventListener("pointermove", stagingOnPointerMove);
+            stagingCanvas.addEventListener("pointerup", stagingOnPointerUp);
+            stagingCanvas.addEventListener("pointercancel", stagingOnPointerCancel);
+        }
+
+        function stagingOnPointerDown(e) {
+            if (!stagingTool) return;
+            e.preventDefault();
+            stagingCanvas.setPointerCapture(e.pointerId);
+            const pos = stagingEventToFraction(e);
+
+            if (stagingTool === "delete") {
+                stagingDeleteShapeAt(pos);
+                return;
+            }
+
+            if (stagingTool === "point") {
+                // Tapping an existing point relabels it instead of stacking a
+                // duplicate point on top.
+                const existingPoint = stagingFindPointAt(pos);
+                if (existingPoint) {
+                    stagingPromptPointLabel(existingPoint);
+                    return;
+                }
+                // Otherwise a tap on empty space places a new point.
+                const shape = {
+                    id: stagingNewId(),
+                    x: pos.x,
+                    y: pos.y,
+                    color: stagingActiveColor,
+                    label: ""
+                };
+                stagingState.points.push(shape);
+                stagingUndoStack.push({ type: "points", id: shape.id });
+                renderStagingCanvas();
+                stagingPromptPointLabel(shape);
+                return;
+            }
+
+            // rect and arrow both need a drag from start to end
+            stagingDragStart = pos;
+            stagingDragCurrent = pos;
+        }
+
+        // Hit-tests the tap position (in 0-1 fractions) against all shapes and
+        // deletes the first match. Checked in this order: points (small, most
+        // precise target), arrows (thin, needs distance-to-segment), rects
+        // (largest, most likely to overlap others — checked last).
+        function stagingDeleteShapeAt(pos) {
+            const w = stagingCanvas.width / (window.devicePixelRatio || 1);
+            const h = stagingCanvas.height / (window.devicePixelRatio || 1);
+            const px = pos.x * w, py = pos.y * h;
+
+            const POINT_HIT_RADIUS = 16;
+            for (let i = stagingState.points.length - 1; i >= 0; i--) {
+                const p = stagingState.points[i];
+                const d = Math.hypot(p.x * w - px, p.y * h - py);
+                if (d <= POINT_HIT_RADIUS) {
+                    stagingState.points.splice(i, 1);
+                    renderStagingCanvas();
+                    return;
+                }
+            }
+
+            const ARROW_HIT_DIST = 12;
+            for (let i = stagingState.arrows.length - 1; i >= 0; i--) {
+                const a = stagingState.arrows[i];
+                const d = stagingDistToSegment(px, py, a.x1 * w, a.y1 * h, a.x2 * w, a.y2 * h);
+                if (d <= ARROW_HIT_DIST) {
+                    const removedOrder = a.order;
+                    stagingState.arrows.splice(i, 1);
+                    // Renumber remaining arrows so numbering stays gap-free and
+                    // still reflects draw order.
+                    stagingState.arrows.forEach(arrow => {
+                        if (arrow.order > removedOrder) arrow.order -= 1;
+                    });
+                    renderStagingCanvas();
+                    return;
+                }
+            }
+
+            for (let i = stagingState.rects.length - 1; i >= 0; i--) {
+                const r = stagingState.rects[i];
+                const rx = r.x * w, ry = r.y * h, rw = r.w * w, rh = r.h * h;
+                // Hit anywhere near the border (rects are meant as outlines/marks,
+                // not filled regions, so we don't hit-test the interior).
+                const nearLeft = Math.abs(px - rx) <= ARROW_HIT_DIST && py >= ry - ARROW_HIT_DIST && py <= ry + rh + ARROW_HIT_DIST;
+                const nearRight = Math.abs(px - (rx + rw)) <= ARROW_HIT_DIST && py >= ry - ARROW_HIT_DIST && py <= ry + rh + ARROW_HIT_DIST;
+                const nearTop = Math.abs(py - ry) <= ARROW_HIT_DIST && px >= rx - ARROW_HIT_DIST && px <= rx + rw + ARROW_HIT_DIST;
+                const nearBottom = Math.abs(py - (ry + rh)) <= ARROW_HIT_DIST && px >= rx - ARROW_HIT_DIST && px <= rx + rw + ARROW_HIT_DIST;
+                if (nearLeft || nearRight || nearTop || nearBottom) {
+                    stagingState.rects.splice(i, 1);
+                    renderStagingCanvas();
+                    return;
+                }
+            }
+        }
+
+        // Shortest distance from point (px,py) to the line segment (x1,y1)-(x2,y2).
+        function stagingDistToSegment(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1, dy = y2 - y1;
+            const lenSq = dx * dx + dy * dy;
+            let t = lenSq === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / lenSq;
+            t = Math.max(0, Math.min(1, t));
+            const closestX = x1 + t * dx, closestY = y1 + t * dy;
+            return Math.hypot(px - closestX, py - closestY);
+        }
+
+        // Returns the topmost point shape within tap radius of pos (0-1
+        // fractions), or null. Used so tapping an existing point with the
+        // point tool relabels it instead of stacking a duplicate on top.
+        function stagingFindPointAt(pos) {
+            const w = stagingCanvas.width / (window.devicePixelRatio || 1);
+            const h = stagingCanvas.height / (window.devicePixelRatio || 1);
+            const px = pos.x * w, py = pos.y * h;
+            const POINT_HIT_RADIUS = 16;
+            for (let i = stagingState.points.length - 1; i >= 0; i--) {
+                const p = stagingState.points[i];
+                const d = Math.hypot(p.x * w - px, p.y * h - py);
+                if (d <= POINT_HIT_RADIUS) return p;
+            }
+            return null;
+        }
+
+        // Short optional label for an actor/marker point (e.g. a character
+        // name or set piece). Skippable — cancel or empty just clears it.
+        function stagingPromptPointLabel(point) {
+            const input = prompt("Label for this point (optional, e.g. a character name):", point.label || "");
+            if (input === null) return; // cancelled
+            point.label = input.trim().slice(0, 24); // keep diagram readable
+            renderStagingCanvas();
+        }
+
+        function stagingOnPointerMove(e) {
+            if (!stagingDragStart) return;
+            e.preventDefault();
+            stagingDragCurrent = stagingEventToFraction(e);
+            renderStagingCanvas();
+        }
+
+        function stagingOnPointerUp(e) {
+            if (!stagingDragStart) return;
+            e.preventDefault();
+            const end = stagingEventToFraction(e);
+            const start = stagingDragStart;
+            stagingDragStart = null;
+            stagingDragCurrent = null;
+
+            const dx = Math.abs(end.x - start.x);
+            const dy = Math.abs(end.y - start.y);
+            const MIN_DRAG = 0.015; // ignore accidental taps/jitter
+            if (dx < MIN_DRAG && dy < MIN_DRAG) {
+                renderStagingCanvas();
+                return;
+            }
+
+            if (stagingTool === "rect") {
+                const shape = {
+                    id: stagingNewId(),
+                    x: Math.min(start.x, end.x),
+                    y: Math.min(start.y, end.y),
+                    w: dx,
+                    h: dy,
+                    color: stagingActiveColor
+                };
+                stagingState.rects.push(shape);
+                stagingUndoStack.push({ type: "rects", id: shape.id });
+            } else if (stagingTool === "arrow") {
+                const nextOrder = stagingState.arrows.length > 0
+                    ? Math.max(...stagingState.arrows.map(a => a.order)) + 1
+                    : 1;
+                const shape = {
+                    id: stagingNewId(),
+                    x1: start.x,
+                    y1: start.y,
+                    x2: end.x,
+                    y2: end.y,
+                    order: nextOrder,
+                    color: stagingActiveColor
+                };
+                stagingState.arrows.push(shape);
+                stagingUndoStack.push({ type: "arrows", id: shape.id });
+            }
+
+            renderStagingCanvas();
+        }
+
+        function stagingOnPointerCancel() {
+            stagingDragStart = null;
+            stagingDragCurrent = null;
+            renderStagingCanvas();
+        }
+
+        let stagingIdCounter = 0;
+        function stagingNewId() {
+            stagingIdCounter += 1;
+            return "sh" + Date.now().toString(36) + stagingIdCounter;
+        }
+
+        function renderStagingCanvas() {
+            if (!stagingCtx || !stagingCanvas) return;
+            const w = stagingCanvas.width / (window.devicePixelRatio || 1);
+            const h = stagingCanvas.height / (window.devicePixelRatio || 1);
+            const ctx = stagingCtx;
+            ctx.clearRect(0, 0, w, h);
+
+            // Rects first (background layer), then arrows, then points on top
+            stagingState.rects.forEach(r => drawStagingRect(ctx, r, w, h));
+            stagingState.arrows.forEach(a => drawStagingArrow(ctx, a, w, h));
+            stagingState.points.forEach(p => drawStagingPoint(ctx, p, w, h));
+
+            // Live preview while dragging
+            if (stagingDragStart && stagingDragCurrent) {
+                if (stagingTool === "rect") {
+                    const preview = {
+                        x: Math.min(stagingDragStart.x, stagingDragCurrent.x),
+                        y: Math.min(stagingDragStart.y, stagingDragCurrent.y),
+                        w: Math.abs(stagingDragCurrent.x - stagingDragStart.x),
+                        h: Math.abs(stagingDragCurrent.y - stagingDragStart.y)
+                    };
+                    drawStagingRect(ctx, preview, w, h, true);
+                } else if (stagingTool === "arrow") {
+                    const nextOrder = stagingState.arrows.length > 0
+                        ? Math.max(...stagingState.arrows.map(a => a.order)) + 1
+                        : 1;
+                    const preview = {
+                        x1: stagingDragStart.x, y1: stagingDragStart.y,
+                        x2: stagingDragCurrent.x, y2: stagingDragCurrent.y,
+                        order: nextOrder
+                    };
+                    drawStagingArrow(ctx, preview, w, h, true);
+                }
+            }
+        }
+
+        function drawStagingRect(ctx, r, w, h, isPreview) {
+            ctx.save();
+            const color = r.color || "#4fd1c5";
+            ctx.strokeStyle = isPreview ? "rgba(124,140,255,0.9)" : color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash(isPreview ? [6, 4] : []);
+            ctx.strokeRect(r.x * w, r.y * h, r.w * w, r.h * h);
+            ctx.restore();
+        }
+
+        function drawStagingPoint(ctx, p, w, h) {
+            const radius = 12;
+            const cx = p.x * w, cy = p.y * h;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = p.color || "#ff5566";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "rgba(0,0,0,0.4)";
+            ctx.stroke();
+
+            if (p.label) {
+                ctx.font = "bold 12px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "top";
+                const labelY = cy + radius + 3;
+                // Small outline behind the text so labels stay readable
+                // regardless of what's underneath on the canvas.
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "rgba(0,0,0,0.7)";
+                ctx.strokeText(p.label, cx, labelY);
+                ctx.fillStyle = "#fff";
+                ctx.fillText(p.label, cx, labelY);
+            }
+            ctx.restore();
+        }
+
+        function drawStagingArrow(ctx, a, w, h, isPreview) {
+            const x1 = a.x1 * w, y1 = a.y1 * h;
+            const x2 = a.x2 * w, y2 = a.y2 * h;
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const headLen = 12;
+            const color = a.color || "#f6c945";
+
+            ctx.save();
+            ctx.strokeStyle = isPreview ? "rgba(255,255,255,0.8)" : color;
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash(isPreview ? [6, 4] : []);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            // Arrowhead
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+
+            // Order number badge at the midpoint
+            if (!isPreview && a.order) {
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                ctx.beginPath();
+                ctx.arc(midX, midY, 10, 0, Math.PI * 2);
+                ctx.fillStyle = "#0a0e0f";
+                ctx.fill();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.fillStyle = color;
+                ctx.font = "bold 11px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(String(a.order), midX, midY + 0.5);
+            }
+
+            ctx.restore();
+        }
+
+        function undoStagingShape() {
+            const last = stagingUndoStack.pop();
+            if (!last) return;
+            stagingState[last.type] = stagingState[last.type].filter(shape => shape.id !== last.id);
+            renderStagingCanvas();
+        }
+
+        function clearStagingDiagram() {
+            if (!confirm("Clear the whole staging diagram for this scene?")) return;
+            stagingState = { rects: [], points: [], arrows: [] };
+            stagingUndoStack = [];
+            renderStagingCanvas();
+        }
+
+        function saveStagingDiagram() {
+            const play = document.getElementById("screenplayName").value.trim();
+            const name = document.getElementById("sceneName").value.trim();
+            if (!play || !name) return;
+
+            const data = loadScreenplays();
+            if (!data[play]) data[play] = {};
+            if (!data[play][name]) {
+                alert("Save the scene first (using the Save button above), then add a staging diagram.");
+                return;
+            }
+            data[play][name].staging = stagingState;
+            const saved = saveScreenplays(data);
+            warnIfNotPersisted(saved);
+            closeStagingModal();
+        }
+
+        window.addEventListener("resize", () => {
+            if (document.getElementById("stagingModal").classList.contains("open")) {
+                setupStagingCanvas();
+                renderStagingCanvas();
+            }
+        });
 
         function closeAiSettingsModal() {
             document.getElementById("aiSettingsModal").classList.remove("open");
@@ -2917,14 +3508,21 @@
                     const charLabel = scene.myChar ? ` · as ${scene.myChar}` : "";
                     const hasHints = window.swHintsIndex && window.swHintsIndex.has(play + "::" + name);
                     const aiBadge = hasHints ? `<span class="ai-badge" onclick="event.stopPropagation();confirmRegenerateHints('${escapeAttr(play)}','${escapeAttr(name)}')" title="AI hints saved for this scene — tap to regenerate" aria-label="AI hints saved — tap to regenerate">AI</span>` : "";
+                    const hasStaging = scene.staging && (
+                        (scene.staging.rects && scene.staging.rects.length) ||
+                        (scene.staging.points && scene.staging.points.length) ||
+                        (scene.staging.arrows && scene.staging.arrows.length)
+                    );
+                    const stagingBadge = hasStaging ? `<span class="ai-badge" title="Has a staging diagram" aria-label="Has a staging diagram">STG</span>` : "";
                     html += `<div class="scene-row" data-scene="${escapeAttr(name)}">
                 ${draggable ? `<span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span>` : ""}
                 <div class="scene-info">
-                  <div class="name">${escapeHtml(name)}${aiBadge}</div>
+                  <div class="name">${escapeHtml(name)}${aiBadge}${stagingBadge}</div>
                   <div class="meta">${lineCount} lines${charLabel}</div>
                 </div>
                 <div class="scene-actions">
                   <button onclick="loadScene('${escapeAttr(play)}','${escapeAttr(name)}')">Load</button>
+                  <button onclick="event.stopPropagation();openStagingForSavedScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Open staging diagram" aria-label="Open staging diagram">▭↗</button>
                   <button onclick="event.stopPropagation();shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">↗</button>
                   <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">&times;</button>
                 </div>
