@@ -4711,13 +4711,30 @@
         function disablePullToRefresh() {
             let startY = 0;
             let startX = 0;
+            let startTarget = null;
             const threshold = 10;
             let isDraggingDown = false;
+
+            // Find the nearest ancestor (including the element itself) that can
+            // actually scroll vertically. Returns null if none is found before
+            // reaching <body>, meaning only the page/body would receive the scroll.
+            function findScrollableAncestor(el) {
+                while (el && el !== document.body && el !== document.documentElement) {
+                    const style = window.getComputedStyle(el);
+                    const canScrollY = /(auto|scroll)/.test(style.overflowY);
+                    if (canScrollY && el.scrollHeight > el.clientHeight) {
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
 
             document.addEventListener('touchstart', function(e) {
                 const t = e.touches[0];
                 startY = t.clientY;
                 startX = t.clientX;
+                startTarget = e.target;
                 isDraggingDown = false;
             }, { passive: true });
 
@@ -4727,6 +4744,30 @@
                 const dy = t.clientY - startY;
                 const dx = t.clientX - startX;
                 if (dy > threshold && Math.abs(dx) < threshold * 2) {
+                    // If the touch started inside a scrollable container (e.g. the
+                    // saved scenes list), let that container handle its own scroll
+                    // instead of hijacking it as a pull-to-refresh gesture.
+                    const scrollable = findScrollableAncestor(startTarget);
+                    if (scrollable) {
+                        const isEditable = scrollable.tagName === 'TEXTAREA' ||
+                            scrollable.tagName === 'INPUT' ||
+                            scrollable.isContentEditable;
+                        if (scrollable.scrollTop > 0) {
+                            // Not at the top of the inner list/textarea — normal scroll, don't touch it.
+                            return;
+                        }
+                        // Scrollable is already at its top. For editable fields
+                        // (textareas), never preventDefault — that would break
+                        // native caret placement, text selection, and scrolling.
+                        // For non-editable containers (e.g. the saved scenes
+                        // list), block the overscroll bounce so it doesn't leak
+                        // into a page-level pull-to-refresh.
+                        if (!isEditable) {
+                            e.preventDefault();
+                        }
+                        return;
+                    }
+
                     const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
                     if (scrollTop <= 0) {
                         e.preventDefault();
