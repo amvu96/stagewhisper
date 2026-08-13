@@ -1285,7 +1285,6 @@
                                 <line x1="12" y1="18" x2="12" y2="22"/>
                             </svg>
                             <span class="mode-seg-label">Monologue</span>
-                            <span class="mode-seg-badge">WIP</span>
                         </button>
                     </div>
                     <div class="mode-status-row">
@@ -2823,7 +2822,7 @@
                   ${escapeHtml(play)}
                 </span>
                 <div class="header-actions">
-                  <button onclick="event.stopPropagation();shareScreenplay('${escapeAttr(play)}')" title="Share entire screenplay via QR code" aria-label="Share screenplay">Share</button>
+                  <button onclick="event.stopPropagation();shareScreenplay('${escapeAttr(play)}')" title="Share entire screenplay via QR code" aria-label="Share screenplay">↗</button>
                   <button class="play-all-btn" onclick="event.stopPropagation();playAllScenes('${escapeAttr(play)}')" title="Play all scenes from this screenplay" aria-label="Play all scenes">Play All</button>
                   <button class="del" onclick="event.stopPropagation();deleteScreenplay('${escapeAttr(play)}')">&times;</button>
                 </div>
@@ -2847,7 +2846,7 @@
                 </div>
                 <div class="scene-actions">
                   <button onclick="loadScene('${escapeAttr(play)}','${escapeAttr(name)}')">Load</button>
-                  <button onclick="event.stopPropagation();shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">Share</button>
+                  <button onclick="event.stopPropagation();shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">↗</button>
                   <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">&times;</button>
                 </div>
               </div>`;
