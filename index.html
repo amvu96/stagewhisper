@@ -1597,6 +1597,8 @@
                 <button onclick="saveAiSettings()">Save Settings</button>
                 <button onclick="closeAiSettingsModal()">Close</button>
             </div>
+
+            <div id="appVersionText" style="text-align:center; font-size:0.7rem; color:var(--muted); margin-top:14px; opacity:0.6;"></div>
         </div>
     </div>
 
@@ -2115,6 +2117,37 @@
             const promptInput = document.getElementById("aiPromptInput");
             if (promptInput) promptInput.value = getAiSystemPrompt();
             document.getElementById("aiSettingsModal").classList.add("open");
+            loadAppVersionText();
+        }
+
+        let cachedAppVersionText = null;
+
+        // Reads the CACHE_NAME constant out of sw.js at runtime, so the
+        // version shown here always matches whatever was last deployed,
+        // without needing a second place to remember to bump it.
+        async function loadAppVersionText() {
+            const el = document.getElementById("appVersionText");
+            if (!el) return;
+
+            if (cachedAppVersionText) {
+                el.textContent = cachedAppVersionText;
+                return;
+            }
+
+            el.textContent = "";
+            try {
+                const res = await fetch("sw.js", { cache: "no-store" });
+                if (!res.ok) throw new Error("sw.js fetch failed: " + res.status);
+                const text = await res.text();
+                const match = text.match(/CACHE_NAME\s*=\s*["']([^"']+)["']/);
+                if (match && match[1]) {
+                    cachedAppVersionText = match[1];
+                    el.textContent = cachedAppVersionText;
+                }
+            } catch (e) {
+                // Non-critical — just leave the version line blank.
+                console.warn("Couldn't read app version from sw.js", e);
+            }
         }
 
         function closeAiSettingsModal() {
@@ -3885,14 +3918,14 @@
 
             if (currentMonologueLevel === 0) {
                 // Read Mode: show full text
-                lineText.innerHTML = section.text;
+                lineText.innerHTML = escapeHtml(section.text);
                 lineText.style.fontSize = fontSize + "rem";
             } else if (currentMonologueLevel === 1) {
                 // Partial Recall Mode: fill-in-the-blanks
                 if (!revealed) {
                     lineText.innerHTML = createFillInBlanks(section.text, 0.3);
                 } else {
-                    lineText.innerHTML = section.text;
+                    lineText.innerHTML = escapeHtml(section.text);
                 }
                 lineText.style.fontSize = fontSize + "rem";
             } else if (currentMonologueLevel === 2) {
@@ -3900,7 +3933,7 @@
                 if (!revealed) {
                     lineText.innerHTML = createFirstWordCues(section.text);
                 } else {
-                    lineText.innerHTML = section.text;
+                    lineText.innerHTML = escapeHtml(section.text);
                 }
                 lineText.style.fontSize = fontSize + "rem";
             } else if (currentMonologueLevel === 4) {
@@ -3908,7 +3941,7 @@
                 if (!revealed) {
                     lineText.innerHTML = `<span style="color:var(--muted); font-style:italic;">· · ·</span>`;
                 } else {
-                    lineText.innerHTML = section.text;
+                    lineText.innerHTML = escapeHtml(section.text);
                 }
                 lineText.style.fontSize = fontSize + "rem";
             }
@@ -3947,7 +3980,7 @@
             const words = text.split(/\s+/);
             const result = words.map((word, idx) => {
                 // Keep first and last words visible
-                if (idx === 0 || idx === words.length - 1) return word;
+                if (idx === 0 || idx === words.length - 1) return escapeHtml(word);
                 // Blank out approximately blankRatio of words
                 if (Math.random() < blankRatio) {
                     // Simple inline blank - matches word length
@@ -3955,7 +3988,7 @@
                     const blankLen = Math.max(3, wordLen);
                     return `<span style="color:var(--muted); font-style:italic;">${'_'.repeat(blankLen)}</span>`;
                 }
-                return word;
+                return escapeHtml(word);
             });
             return result.join(' ');
         }
@@ -3967,8 +4000,8 @@
                 const trimmed = s.trim();
                 const words = trimmed.split(/\s+/);
                 if (words.length === 0) return '';
-                const firstWord = words[0];
-                const punctuation = trimmed.match(/[.!?]+$/)?.[0] || '';
+                const firstWord = escapeHtml(words[0]);
+                const punctuation = escapeHtml(trimmed.match(/[.!?]+$/)?.[0] || '');
                 return `${firstWord} <span style="color:var(--muted);">···</span>${punctuation}`;
             }).join(' ');
         }
@@ -3986,15 +4019,15 @@
                     aiHintBtn.textContent = "?";
                     break;
                 case 1:
-                    hintText = getFirstLetters(text);
+                    hintText = escapeHtml(getFirstLetters(text));
                     aiHintBtn.textContent = "1";
                     break;
                 case 2:
-                    hintText = getFirstWord(text);
+                    hintText = escapeHtml(getFirstWord(text));
                     aiHintBtn.textContent = "2";
                     break;
                 case 3:
-                    hintText = getFirstFewWords(text, 3);
+                    hintText = escapeHtml(getFirstFewWords(text, 3));
                     aiHintBtn.textContent = "3";
                     break;
                 case 4:
@@ -4002,7 +4035,7 @@
                     aiHintBtn.textContent = "4";
                     break;
                 case 5:
-                    hintText = text;
+                    hintText = escapeHtml(text);
                     aiHintBtn.textContent = "✓";
                     break;
             }
