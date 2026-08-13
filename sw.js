@@ -1,6 +1,8 @@
-const CACHE_NAME = "stage-whisper-v44";
+const CACHE_NAME = "stage-whisper-v45";
 const ASSETS = [
   "./index.html",
+  "./qrcode.min.js",
+  "./jsQR.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
