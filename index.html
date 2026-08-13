@@ -106,12 +106,17 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
+            max-height: calc(100vh - var(--bottom-bar-h) - 40px);
         }
         .side-col-inner {
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 10px;
             overflow: hidden;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
         .side-col .panel-header,
         .tts-panel-inner .panel-header {
@@ -123,6 +128,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
         .side-col .panel-header .close-sheet,
         .tts-panel-inner .panel-header .close-sheet {
@@ -140,6 +146,28 @@
         .side-col .panel-body,
         .tts-panel-inner .panel-body {
             padding: 0 18px 18px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        .side-col .panel-body::-webkit-scrollbar,
+        .tts-panel-inner .panel-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .side-col .panel-body::-webkit-scrollbar-track,
+        .tts-panel-inner .panel-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .side-col .panel-body::-webkit-scrollbar-thumb,
+        .tts-panel-inner .panel-body::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        .side-col .panel-body::-webkit-scrollbar-thumb:hover,
+        .tts-panel-inner .panel-body::-webkit-scrollbar-thumb:hover {
+            background: var(--muted);
         }
         .account-bar {
             display: flex;
@@ -607,6 +635,7 @@
         }
         .desktop-start-btn-wrapper {
             display: none;
+            flex-shrink: 0;
         }
         .desktop-start-btn-wrapper .start-practice-btn {
             width: 100%;
