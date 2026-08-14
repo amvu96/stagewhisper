@@ -51,18 +51,18 @@
             --bottom-bar-h: 60px;
         }
         [data-theme="light"] {
-            --bg: #f2f5f4;
-            --panel: #ffffff;
-            --border: #dbe4e1;
-            --neon: #0e8a4f;
-            --neon-dim: #0a6b3d;
-            --cyan: #0077b6;
-            --text: #182220;
-            --muted: #5c6b66;
-            --danger: #c8283a;
-            --bg-gradient-1: #f7faf9;
-            --bg-gradient-2: #e8eeec;
-            --input-bg: #eef2f1;
+            --bg: #f7f5f0;
+            --panel: #faf8f4;
+            --border: #e5e2dc;
+            --neon: #0a9d58;
+            --neon-dim: #087f47;
+            --cyan: #1a8cff;
+            --text: #0d1412;
+            --muted: #5a6964;
+            --danger: #d32f2f;
+            --bg-gradient-1: #faf8f4;
+            --bg-gradient-2: #f5f3ee;
+            --input-bg: #f2f0eb;
         }
         * {
             box-sizing: border-box;
@@ -375,6 +375,12 @@
             padding: 10px 16px;
             z-index: 100;
             gap: 10px;
+        }
+        @media (min-width: 1040px) {
+            .bottom-bar {
+                padding-left: calc((100vw - 1040px) / 2 + 16px);
+                padding-right: calc((100vw - 1040px) / 2 + 16px);
+            }
         }
         .bar-right {
             display: flex;
@@ -985,6 +991,30 @@
             max-width: 640px;
             flex-direction: column;
             align-items: center;
+            padding-bottom: 360px; /* Space for fixed controls */
+        }
+        .practice-fixed-controls {
+            position: fixed;
+            bottom: var(--bottom-bar-h);
+            left: 0;
+            right: 0;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+            max-width: 640px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .practice-fixed-controls .controls-row {
+            margin-top: 0;
+        }
+        .practice-fixed-controls .big-btn {
+            margin-top: 0;
         }
         .stage {
             background: var(--panel);
@@ -1253,6 +1283,19 @@
         body.dragging-active {
             -webkit-user-select: none;
             user-select: none;
+        }
+        @media (min-width: 900px) {
+            .scene-row {
+                cursor: grab;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            .scene-row:active {
+                cursor: grabbing;
+            }
+            .scene-row.dragging {
+                cursor: grabbing;
+            }
         }
         .scene-info {
             flex: 1;
@@ -1576,35 +1619,38 @@
                     </div>
                 </div>
 
-                <button class="big-btn" id="mainBtn" onclick="handlePress()">NEXT LINE</button>
+                <div class="practice-fixed-controls" id="practiceFixedControls" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;width:100%;">
+                        <div class="score-row" id="scoreRow" style="display:none;margin:0;">
+                            <span>Got it: <span class="good" id="gotItCount">0</span></span>
+                            <span>Missed: <span class="bad" id="missedCount">0</span></span>
+                        </div>
+                        <div class="font-controls" style="margin:0;">
+                            <span style="color:var(--muted);font-size:0.75rem;">TEXT SIZE</span>
+                            <button onclick="changeFont(-1)">A-</button>
+                            <button onclick="changeFont(1)">A+</button>
+                        </div>
+                    </div>
 
-                <div class="controls-row" id="scoreButtons" style="display:none;">
-                    <button class="score-btn good" onclick="markScore(true)">Got it</button>
-                    <button class="score-btn bad" onclick="markScore(false)">Missed it</button>
+                    <div class="controls-row" id="scoreButtons" style="display:none;">
+                        <button class="score-btn good" onclick="markScore(true)">Got it</button>
+                        <button class="score-btn bad" onclick="markScore(false)">Missed it</button>
+                    </div>
+
+                    <button class="big-btn" id="mainBtn" onclick="handlePress()">NEXT LINE</button>
+
+                    <div class="controls-row">
+                        <button id="hideBtn" onclick="hideAgain()">Hide</button>
+                        <button onclick="restart()">Restart</button>
+                        <button id="reshuffleBtn" onclick="reshuffle()">Reshuffle</button>
+                    </div>
+
+                    <div class="controls-row">
+                        <button onclick="openStagingModal()" title="View staging diagram for this scene" aria-label="View staging diagram">Staging</button>
+                    </div>
+
+                    <div class="hint" id="practiceHint" style="margin-top:8px;text-align:center;font-size:0.65rem;">Space / Enter = reveal or next &nbsp;•&nbsp; G = got it &nbsp;•&nbsp; M = missed it</div>
                 </div>
-
-                <div class="controls-row">
-                    <button id="hideBtn" onclick="hideAgain()">Hide Again</button>
-                    <button onclick="restart()">Restart</button>
-                    <button id="reshuffleBtn" onclick="reshuffle()">Reshuffle</button>
-                </div>
-
-                <div class="controls-row">
-                    <button onclick="openStagingModal()" title="View staging diagram for this scene" aria-label="View staging diagram">Staging</button>
-                </div>
-
-                <div class="score-row" id="scoreRow" style="display:none;">
-                    <span>Got it: <span class="good" id="gotItCount">0</span></span>
-                    <span>Missed: <span class="bad" id="missedCount">0</span></span>
-                </div>
-
-                <div class="font-controls">
-                    <span style="color:var(--muted);font-size:0.75rem;">TEXT SIZE</span>
-                    <button onclick="changeFont(-1)">A-</button>
-                    <button onclick="changeFont(1)">A+</button>
-                </div>
-
-                <div class="hint" id="practiceHint" style="margin-top:14px;text-align:center;">Space / Enter = reveal or next &nbsp;•&nbsp; G = got it &nbsp;•&nbsp; M = missed it</div>
             </div>
 
             <div id="done">
@@ -1615,7 +1661,7 @@
                 <button style="margin-top:10px;width:100%;max-width:320px;" onclick="backToSetup()">Finish</button>
             </div>
 
-            <footer>Everything stays in this browser tab — nothing is saved or uploaded, except scenes you choose to export.</footer>
+            <footer id="appFooter">Everything stays in this browser tab — nothing is saved or uploaded, except scenes you choose to export.</footer>
 
         </div>
 
@@ -4697,8 +4743,10 @@
             document.getElementById("setup").style.display = "none";
             document.getElementById("done").style.display = "none";
             document.getElementById("practice").style.display = "flex";
+            document.getElementById("practiceFixedControls").style.display = "flex";
             document.getElementById("scoreRow").style.display = cueMode ? "flex" : "none";
             document.querySelector(".side-col").style.display = "none";
+            document.getElementById("appFooter").style.display = "none";
             currentScreen = "practice";
             closeScenesSheet();
             updateBottomBarVisibility();
@@ -4751,6 +4799,7 @@
             document.getElementById("setup").style.display = "none";
             document.getElementById("done").style.display = "none";
             document.getElementById("practice").style.display = "flex";
+            document.getElementById("practiceFixedControls").style.display = "flex";
 
             // Show score buttons for Full Recall mode only
             const scoreButtons = document.getElementById("scoreButtons");
@@ -4760,6 +4809,7 @@
 
             document.getElementById("scoreRow").style.display = "flex"; // Show session stats
             document.querySelector(".side-col").style.display = "none";
+            document.getElementById("appFooter").style.display = "none";
 
             // Update button labels and hints for monologue mode
             const reshuffleBtn = document.getElementById("reshuffleBtn");
@@ -5029,8 +5079,10 @@
 
         function showMonologueDone() {
             document.getElementById("practice").style.display = "none";
+            document.getElementById("practiceFixedControls").style.display = "none";
             const doneScreen = document.getElementById("done");
             doneScreen.style.display = "block"; // Use block, not flex for proper vertical layout
+            document.getElementById("appFooter").style.display = "block";
             currentScreen = "done";
 
             const totalSections = monologueSections.length;
@@ -5479,7 +5531,9 @@
 
         function showDone() {
             document.getElementById("practice").style.display = "none";
+            document.getElementById("practiceFixedControls").style.display = "none";
             document.getElementById("done").style.display = "block";
+            document.getElementById("appFooter").style.display = "block";
             currentScreen = "done";
             let stats = `<p>${order.length} lines run through.</p>`;
             if (cueMode) {
@@ -5508,7 +5562,9 @@
             updateScore();
             document.getElementById("done").style.display = "none";
             document.getElementById("practice").style.display = "flex";
+            document.getElementById("practiceFixedControls").style.display = "flex";
             document.getElementById("scoreRow").style.display = "flex";
+            document.getElementById("appFooter").style.display = "none";
             currentScreen = "practice";
             updateBottomBarVisibility();
             renderCurrent();
@@ -5523,7 +5579,9 @@
                 missed = 0;
                 document.getElementById("done").style.display = "none";
                 document.getElementById("practice").style.display = "flex";
+                document.getElementById("practiceFixedControls").style.display = "flex";
                 document.getElementById("scoreRow").style.display = "flex";
+                document.getElementById("appFooter").style.display = "none";
                 currentScreen = "practice";
                 updateBottomBarVisibility();
                 renderMonologueSection();
@@ -5537,7 +5595,9 @@
                 updateScore();
                 document.getElementById("done").style.display = "none";
                 document.getElementById("practice").style.display = "flex";
+                document.getElementById("practiceFixedControls").style.display = "flex";
                 document.getElementById("scoreRow").style.display = cueMode ? "flex" : "none";
+                document.getElementById("appFooter").style.display = "none";
                 currentScreen = "practice";
                 updateBottomBarVisibility();
                 renderCurrent();
@@ -5572,6 +5632,8 @@
                 revealed = false;
                 document.getElementById("done").style.display = "none";
                 document.getElementById("practice").style.display = "flex";
+                document.getElementById("practiceFixedControls").style.display = "flex";
+                document.getElementById("appFooter").style.display = "none";
                 currentScreen = "practice";
                 updateBottomBarVisibility();
                 renderCurrent();
@@ -5580,9 +5642,11 @@
 
         function backToSetup() {
             document.getElementById("practice").style.display = "none";
+            document.getElementById("practiceFixedControls").style.display = "none";
             document.getElementById("done").style.display = "none";
             document.getElementById("setup").style.display = "block";
             document.querySelector(".side-col").style.display = "flex";
+            document.getElementById("appFooter").style.display = "block";
             currentScreen = "setup";
             currentHints = null;
             closeScenesSheet();
