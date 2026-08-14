@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -50,18 +51,18 @@
             --bottom-bar-h: 60px;
         }
         [data-theme="light"] {
-            --bg: #fbfaf8; /* Soft, warm off‑white background */
-            --panel: #ffffff; /* Pure white panels to pop against the background */
-            --border: #e4dfd7; /* Warmer, more defined border */
-            --neon: #15803d; /* Richer, deeper green for better contrast */
-            --neon-dim: #166534; /* Darker warm green */
-            --cyan: #0369a1; /* Deeper ocean blue */
-            --text: #292524; /* Warm, dark gray (near black) for reading comfort */
-            --muted: #78716c; /* Earthy, warm medium gray */
-            --danger: #b91c1c; /* Deeper red */
-            --bg-gradient-1: #ffffff;
-            --bg-gradient-2: #f4f0ea; /* Subtle warm ivory gradient */
-            --input-bg: #f5f2ec; /* Warm, distinctly separated input background */
+            --bg: #f2f5f4;
+            --panel: #ffffff;
+            --border: #dbe4e1;
+            --neon: #0e8a4f;
+            --neon-dim: #0a6b3d;
+            --cyan: #0077b6;
+            --text: #182220;
+            --muted: #5c6b66;
+            --danger: #c8283a;
+            --bg-gradient-1: #f7faf9;
+            --bg-gradient-2: #e8eeec;
+            --input-bg: #eef2f1;
         }
         * {
             box-sizing: border-box;
@@ -79,7 +80,14 @@
             background: radial-gradient(circle at top, var(--bg-gradient-1) 0%, var(--bg-gradient-2) 70%);
             color: var(--text);
             font-family: 'Courier New', ui-monospace, monospace;
+            /* 100vh on mobile browsers is measured against the largest
+               possible viewport (address bar hidden), so it reserves more
+               height than is actually visible most of the time — leaving a
+               big empty gap below short content. 100dvh tracks the real,
+               current viewport instead. Fallback to 100vh for older
+               browsers that don't support dvh units. */
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -106,6 +114,7 @@
             flex-direction: column;
             gap: 14px;
             max-height: calc(100vh - var(--bottom-bar-h) - 40px);
+            max-height: calc(100dvh - var(--bottom-bar-h) - 40px);
         }
         .side-col-inner {
             background: var(--panel);
@@ -1029,7 +1038,6 @@
             font-size: 0.85rem;
             margin-bottom: 14px;
             min-height: 1.2em;
-            transition: opacity 0.3s ease; /* Smooth fade when context updates */
         }
         .context-line.clickable {
             cursor: pointer;
@@ -1064,7 +1072,6 @@
             font-size: 0.85rem;
             margin-bottom: 8px;
             min-height: 1.2em;
-            transition: opacity 0.3s ease;
         }
         .line-text {
             font-size: 1.3rem;
@@ -1073,15 +1080,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            /* Hardware-accelerated transitions for a fluid reveal */
-            transition: color 0.4s cubic-bezier(0.4, 0, 0.2, 1), letter-spacing 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), filter 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .line-hidden {
             color: var(--muted);
             letter-spacing: 3px;
-            opacity: 0.3;
-            filter: blur(2.5px); /* Creates a focus‑pull effect when revealed */
-            transform: scale(0.98); /* Subtle pop forward when the line appears */
         }
         .big-btn {
             width: 100%;
@@ -1203,9 +1205,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 14px;
-            font-size: 0.8rem;
-            white-space: nowrap;
+            padding: 0 12px;
+            min-width: 40px;
         }
         .scene-swipe-panel button.del {
             border-color: var(--danger);
@@ -1277,8 +1278,10 @@
             flex-shrink: 0;
         }
         .scene-actions button {
-            padding: 6px 8px;
-            font-size: 0.76rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 10px;
         }
         .storage-warning {
             color: var(--danger);
@@ -1358,6 +1361,78 @@
         .screenplay-header .header-actions .play-all-btn:hover {
             background: rgba(58, 214, 255, 0.08);
         }
+        /* ----- Advanced options disclosure & first-visit banner ----- */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            background: transparent;
+            border: 1px dashed var(--border);
+            color: var(--muted);
+            padding: 10px 12px;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            letter-spacing: 0.5px;
+        }
+        .advanced-toggle:hover {
+            color: var(--text);
+            border-color: var(--neon-dim);
+        }
+        .advanced-toggle .chev {
+            transition: transform 0.2s ease;
+            display: inline-flex;
+        }
+        #advancedOptions[open] .advanced-toggle .chev {
+            transform: rotate(180deg);
+        }
+        #advancedOptions summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        #advancedOptions summary::-webkit-details-marker {
+            display: none;
+        }
+        #advancedOptions .advanced-body {
+            margin-top: 12px;
+            padding-top: 4px;
+        }
+        .welcome-banner {
+            background: var(--input-bg);
+            border: 1px solid var(--neon-dim);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text);
+            position: relative;
+        }
+        .welcome-banner b {
+            color: var(--neon);
+        }
+        .welcome-banner .dismiss-banner {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 1.1rem;
+            line-height: 1;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+        .welcome-banner .dismiss-banner:hover {
+            color: var(--text);
+        }
+        .mode-toggle-intro {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
         footer {
             color: var(--muted);
             font-size: 0.7rem;
@@ -1375,98 +1450,116 @@
             <div class="subtitle">Paste your script. Reveal one line at a time. Learn faster.</div>
 
             <div class="card" id="setup">
+                <div class="welcome-banner" id="welcomeBanner" style="display:none;">
+                    <button type="button" class="dismiss-banner" onclick="dismissWelcomeBanner()" title="Dismiss" aria-label="Dismiss">&times;</button>
+                    <b>New here?</b> Paste a script below and tap <b>Start Practice</b> — that's all you need. Everything under "More options" (AI hints, shuffle, saving scenes, staging diagrams) is optional and can wait until later.
+                </div>
+
                 <label>Paste your script</label>
                 <textarea id="scriptInput" oninput="updateStartButtonState(); if(isMonologueMode) updateMonologueSections();" placeholder="One line per row. For cue practice, use format:&#10;JULIET: O Romeo, Romeo, wherefore art thou Romeo?&#10;ROMEO: Shall I hear more, or shall I speak at this?"></textarea>
-                <div class="hint">Tip: use <b>CHARACTER: dialogue</b> per line to unlock cue mode (see below). Plain lines work fine too for a simple read-through.</div>
+                <div class="hint">Tip: use <b>CHARACTER: dialogue</b> per line to unlock cue mode. Plain lines work fine too for a simple read-through.</div>
 
-                <label>Your character name (optional, enables cue mode)</label>
-                <input type="text" id="myChar" placeholder="e.g. JULIET">
-                <div class="hint">When set, everyone else's lines auto-display as your cue — only <i>your</i> lines stay hidden until you press the button.</div>
-                <div class="hint" style="margin-bottom:16px;">&nbsp;</div>
-
-                <!-- Monologue section preview (hidden by default) -->
-                <div id="monologueSectionPreview" style="display:none;">
-                    <label>Sections (<span id="sectionCount">0</span> sections detected)</label>
-                    <div id="sectionList" style="max-height:200px; overflow-y:auto; padding:8px; background:var(--input-bg); border-radius:4px; border:1px solid var(--border);"></div>
-                    <div class="hint">Monologue auto-split into sections. You'll practice each section independently.</div>
-
-                    <label style="margin-top:12px;">Practice Session</label>
-                    <select id="monologuePracticeMode" style="width:100%;">
-                        <option value="all">All sections (sequential)</option>
-                        <option value="due">Due for review</option>
-                        <option value="weak">Weak sections only</option>
-                        <option value="random">Random order</option>
-                        <option value="randomStart">Random start point</option>
-                    </select>
-                    <div class="hint">Choose which sections to practice in this session.</div>
-                </div>
-
-                <!-- Real state lives in these hidden checkboxes so existing logic (save/load, scoring, etc.)
-                     keeps working unchanged. The segmented button below just drives them. -->
-                <input type="checkbox" id="aiMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
-                <input type="checkbox" id="shuffleMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
-                <input type="checkbox" id="hintMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
-                <input type="checkbox" id="monologueMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
-
-                <div class="mode-toggle-wrap">
-                    <div class="mode-toggle" role="group" aria-label="Practice mode toggles" id="modeToggleGroup">
-                        <button type="button" class="mode-seg" data-mode="ai" id="segAi" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2l1.8 5.6L19 9.5l-5.2 1.9L12 17l-1.8-5.6L5 9.5l5.2-1.9L12 2z"/>
-                            </svg>
-                            <span class="mode-seg-label">AI</span>
-                        </button>
-                        <button type="button" class="mode-seg" data-mode="shuffle" id="segShuffle" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="16 3 21 3 21 8"/>
-                                <line x1="4" y1="20" x2="21" y2="3"/>
-                                <polyline points="21 16 21 21 16 21"/>
-                                <line x1="15" y1="15" x2="21" y2="21"/>
-                                <line x1="4" y1="4" x2="9" y2="9"/>
-                            </svg>
-                            <span class="mode-seg-label">Shuffle</span>
-                        </button>
-                        <button type="button" class="mode-seg" data-mode="hints" id="segHints" aria-pressed="false" title="Show first-letter hints for hidden lines" aria-label="First-letter hints">
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 18h6"/>
-                                <path d="M10 22h4"/>
-                                <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.05V17h6v-.25c0-.85.4-1.55 1-2.05A7 7 0 0 0 12 2z"/>
-                            </svg>
-                            <span class="mode-seg-label">1st Letter</span>
-                        </button>
-                        <button type="button" class="mode-seg" data-mode="monologue" id="segMonologue" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
-                                <path d="M19 11a7 7 0 0 1-14 0"/>
-                                <line x1="12" y1="18" x2="12" y2="22"/>
-                            </svg>
-                            <span class="mode-seg-label">Monologue</span>
-                        </button>
-                    </div>
-                    <div class="mode-status-row">
-                        <span id="modeStatusText">No modes active</span>
-                    </div>
-                </div>
-
-                <label>Screenplay</label>
-                <input type="text" id="screenplayName" list="screenplayOptions" placeholder="e.g. Romeo and Juliet">
-                <datalist id="screenplayOptions"></datalist>
-
-                <label>Save this scene as</label>
-                <div style="display:flex;gap:8px;">
-                    <input type="text" id="sceneName" placeholder="e.g. Act 2 Scene 1 — Balcony">
-                    <button onclick="saveScene()" style="white-space:nowrap;">Save</button>
-                </div>
-                <div class="hint">Group scenes under a screenplay so you can keep separate roles — e.g. two characters from the same play — organized and easy to tell apart.</div>
-
-                <div style="margin-top:12px;">
-                    <button type="button" onclick="openStagingModal()" style="width:100%;">Staging Diagram</button>
-                    <div class="hint">Sketch entrances, exits, and blocking for this scene — rectangles, actor points, and numbered movement arrows.</div>
+                <div id="myCharGroup">
+                    <label>Your character name (optional, enables cue mode)</label>
+                    <input type="text" id="myChar" placeholder="e.g. JULIET">
+                    <div class="hint">When set, everyone else's lines auto-display as your cue — only <i>your</i> lines stay hidden until you press the button.</div>
                 </div>
 
                 <div class="mobile-start-btn-wrapper">
                     <button class="primary start-practice-btn" id="startPracticeBtn" onclick="startPractice()" disabled>START PRACTICE</button>
                 </div>
+
+                <details id="advancedOptions">
+                    <summary>
+                        <div class="advanced-toggle">
+                            <span>More options</span>
+                            <span class="chev">▾</span>
+                        </div>
+                    </summary>
+
+                    <div class="advanced-body">
+                        <!-- Monologue section preview (hidden by default) -->
+                        <div id="monologueSectionPreview" style="display:none;">
+                            <label>Sections (<span id="sectionCount">0</span> sections detected)</label>
+                            <div id="sectionList" style="max-height:200px; overflow-y:auto; padding:8px; background:var(--input-bg); border-radius:4px; border:1px solid var(--border);"></div>
+                            <div class="hint">Monologue auto-split into sections. You'll practice each section independently.</div>
+
+                            <label style="margin-top:12px;">Practice Session</label>
+                            <select id="monologuePracticeMode" style="width:100%;">
+                                <option value="all">All sections (sequential)</option>
+                                <option value="due">Due for review</option>
+                                <option value="weak">Weak sections only</option>
+                                <option value="random">Random order</option>
+                                <option value="randomStart">Random start point</option>
+                            </select>
+                            <div class="hint">Choose which sections to practice in this session.</div>
+                        </div>
+
+                        <!-- Real state lives in these hidden checkboxes so existing logic (save/load, scoring, etc.)
+                             keeps working unchanged. The segmented button below just drives them. -->
+                        <input type="checkbox" id="aiMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <input type="checkbox" id="shuffleMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <input type="checkbox" id="hintMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <input type="checkbox" id="monologueMode" class="visually-hidden" tabindex="-1" aria-hidden="true">
+
+                        <div class="mode-toggle-wrap">
+                            <div class="mode-toggle-intro">Optional ways to change how lines are hidden — tap any to turn it on.</div>
+                            <div class="mode-toggle" role="group" aria-label="Practice mode toggles" id="modeToggleGroup">
+                                <button type="button" class="mode-seg" data-mode="ai" id="segAi" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2l1.8 5.6L19 9.5l-5.2 1.9L12 17l-1.8-5.6L5 9.5l5.2-1.9L12 2z"/>
+                                    </svg>
+                                    <span class="mode-seg-label">AI</span>
+                                </button>
+                                <button type="button" class="mode-seg" data-mode="shuffle" id="segShuffle" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="16 3 21 3 21 8"/>
+                                        <line x1="4" y1="20" x2="21" y2="3"/>
+                                        <polyline points="21 16 21 21 16 21"/>
+                                        <line x1="15" y1="15" x2="21" y2="21"/>
+                                        <line x1="4" y1="4" x2="9" y2="9"/>
+                                    </svg>
+                                    <span class="mode-seg-label">Shuffle</span>
+                                </button>
+                                <button type="button" class="mode-seg" data-mode="hints" id="segHints" aria-pressed="false" title="Show first-letter hints for hidden lines" aria-label="First-letter hints">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9 18h6"/>
+                                        <path d="M10 22h4"/>
+                                        <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.05V17h6v-.25c0-.85.4-1.55 1-2.05A7 7 0 0 0 12 2z"/>
+                                    </svg>
+                                    <span class="mode-seg-label">1st Letter</span>
+                                </button>
+                                <button type="button" class="mode-seg" data-mode="monologue" id="segMonologue" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+                                        <path d="M19 11a7 7 0 0 1-14 0"/>
+                                        <line x1="12" y1="18" x2="12" y2="22"/>
+                                    </svg>
+                                    <span class="mode-seg-label">Monologue</span>
+                                </button>
+                            </div>
+                            <div class="mode-status-row">
+                                <span id="modeStatusText">No modes active</span>
+                            </div>
+                        </div>
+
+                        <label>Screenplay</label>
+                        <input type="text" id="screenplayName" list="screenplayOptions" placeholder="e.g. Romeo and Juliet">
+                        <datalist id="screenplayOptions"></datalist>
+
+                        <label>Save this scene as</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" id="sceneName" placeholder="e.g. Act 2 Scene 1 — Balcony">
+                            <button onclick="saveScene()" style="white-space:nowrap;">Save</button>
+                        </div>
+                        <div class="hint">Group scenes under a screenplay so you can keep separate roles — e.g. two characters from the same play — organized and easy to tell apart.</div>
+
+                        <div style="margin-top:12px;">
+                            <button type="button" onclick="openStagingModal()" style="width:100%;">Staging Diagram</button>
+                            <div class="hint">Sketch entrances, exits, and blocking for this scene — rectangles, actor points, and numbered movement arrows.</div>
+                        </div>
+                    </div>
+                </details>
             </div>
 
             <div id="practice">
@@ -2930,24 +3023,9 @@
         function handleMonologueToggle(active) {
             isMonologueMode = active;
 
-            // Show/hide character name field (not needed for monologue)
-            const myCharLabel = document.querySelector('label[for="myChar"]') ||
-                               Array.from(document.querySelectorAll('label')).find(l =>
-                                   l.textContent.includes('Your character name'));
-            const myCharInput = document.getElementById('myChar');
-
-            if (myCharLabel) myCharLabel.style.display = active ? 'none' : 'block';
-            if (myCharInput) myCharInput.style.display = active ? 'none' : 'block';
-            // Hide every .hint div between myChar's input and the monologue preview block,
-            // not just the immediate next sibling, so adding/removing hint text here can't
-            // leave a stray hint visible (or the WIP monologue block showing) on load.
-            let sib = myCharInput?.nextElementSibling;
-            while (sib && sib.id !== 'monologueSectionPreview') {
-                if (sib.classList.contains('hint')) {
-                    sib.style.display = active ? 'none' : 'block';
-                }
-                sib = sib.nextElementSibling;
-            }
+            // Character name / cue mode isn't used in monologue mode.
+            const myCharGroup = document.getElementById('myCharGroup');
+            if (myCharGroup) myCharGroup.style.display = active ? 'none' : 'block';
 
             // Show/hide section preview
             const preview = document.getElementById('monologueSectionPreview');
@@ -3450,7 +3528,19 @@
             updateVoiceHint();
             updateStartButtonState();
             closeScenesSheet();
+            // Loading an existing scene means the person is editing/reviewing
+            // it, so surface its screenplay/character/mode settings right away
+            // instead of leaving them tucked behind the collapsed disclosure.
+            const advanced = document.getElementById("advancedOptions");
+            if (advanced) advanced.open = true;
             window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        // Loads a saved scene into the setup form and immediately starts
+        // practice on it — the Play button's action from the saved scenes list.
+        function playScene(play, name) {
+            loadScene(play, name);
+            startPractice();
         }
 
         function deleteScene(play, name) {
@@ -3561,11 +3651,12 @@
                     const stagingBadge = hasStaging ? `<span class="ai-badge" title="Has a staging diagram" aria-label="Has a staging diagram">STG</span>` : "";
                     html += `<div class="scene-row-wrap" data-scene="${escapeAttr(name)}">
                 <div class="scene-swipe-panel left" aria-hidden="true">
-                  <button onclick="closeSceneSwipe(this);openStagingForSavedScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Open staging diagram" aria-label="Open staging diagram">Staging</button>
-                  <button onclick="closeSceneSwipe(this);shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code">Share</button>
+                  <button onclick="closeSceneSwipe(this);loadScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Edit this scene" aria-label="Edit this scene"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                  <button onclick="closeSceneSwipe(this);openStagingForSavedScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Open staging diagram" aria-label="Open staging diagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.6" fill="currentColor" stroke="none"/><path d="M9 9l7 7"/><path d="M12.5 16h3.5v-3.5"/></svg></button>
+                  <button onclick="closeSceneSwipe(this);shareScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Share this scene via QR code" aria-label="Share via QR code"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-3.9"/><path d="M8.6 13.5l6.8 3.9"/></svg></button>
                 </div>
                 <div class="scene-swipe-panel right" aria-hidden="true">
-                  <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')">Delete</button>
+                  <button class="del" onclick="deleteScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Delete this scene" aria-label="Delete this scene"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
                 </div>
                 <div class="scene-row" data-scene="${escapeAttr(name)}">
                 ${draggable ? `<span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span>` : ""}
@@ -3574,7 +3665,7 @@
                   <div class="meta">${lineCount} lines${charLabel}</div>
                 </div>
                 <div class="scene-actions">
-                  <button onclick="loadScene('${escapeAttr(play)}','${escapeAttr(name)}')">Load</button>
+                  <button onclick="playScene('${escapeAttr(play)}','${escapeAttr(name)}')" title="Start practice" aria-label="Start practice"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg></button>
                 </div>
               </div></div>`;
                 });
@@ -3671,11 +3762,25 @@
 
         /* ---------------- Scene row swipe actions ---------------- */
         // Swipe the row LEFT to reveal the right-side panel (Delete).
-        // Swipe the row RIGHT to reveal the left-side panel (Staging, Share).
+        // Swipe the row RIGHT to reveal the left-side panel (Staging, Share, Edit).
         // Only one row stays open at a time; opening a new one or tapping
         // elsewhere closes any previously-open row.
         let sceneSwipeCtx = null;
         let sceneSwipeOpenWrap = null; // the currently-revealed .scene-row-wrap, if any
+
+        // The row's true current on-screen offset persists here across
+        // gestures (sceneSwipeCtx itself is nulled out between drags, so it
+        // can't be used as the source of truth for "where is this row right
+        // now" — reading from it after a gesture ends was the cause of the
+        // fast-swipe "teleport" bug, since a new gesture always saw offset 0
+        // even while the row was still visually open).
+        function getSceneRowOffset(row) {
+            return parseFloat(row.dataset.swipeOffset || "0") || 0;
+        }
+        function setSceneRowOffset(row, offset) {
+            row.dataset.swipeOffset = String(offset);
+            row.style.transform = `translateX(${offset}px)`;
+        }
 
         function attachSceneSwipeHandlers() {
             document.querySelectorAll(".scene-row").forEach(row => {
@@ -3692,14 +3797,23 @@
             const wrap = row.closest(".scene-row-wrap");
             if (!wrap) return;
 
+            // A new gesture on this row always cancels any in-flight one first
+            // (covers the fast opposite-direction re-swipe case, where a new
+            // pointerdown can land before the previous pointerup/cancel fires).
+            if (sceneSwipeCtx && sceneSwipeCtx.row !== row) {
+                cleanupSceneSwipeListeners();
+                sceneSwipeCtx.row.classList.remove("swiping");
+                sceneSwipeCtx = null;
+            }
+
             const leftPanel = wrap.querySelector(".scene-swipe-panel.left");
             const rightPanel = wrap.querySelector(".scene-swipe-panel.right");
             const leftWidth = leftPanel ? leftPanel.getBoundingClientRect().width : 0;
             const rightWidth = rightPanel ? rightPanel.getBoundingClientRect().width : 0;
 
-            // Starting offset: 0 if closed, or the fully-open offset if this
-            // row was already open (lets you drag it further shut in one go).
-            const currentOpenOffset = wrap === sceneSwipeOpenWrap ? sceneSwipeCtx?.lastOffset || 0 : 0;
+            // Starting offset is always read from the row itself, so it's
+            // accurate whether the row is closed, fully open, or mid-drag.
+            const currentOffset = getSceneRowOffset(row);
 
             sceneSwipeCtx = {
                 row,
@@ -3707,8 +3821,8 @@
                 pointerId: e.pointerId,
                 startX: e.clientX,
                 startY: e.clientY,
-                startOffset: currentOpenOffset,
-                lastOffset: currentOpenOffset,
+                startOffset: currentOffset,
+                lastOffset: currentOffset,
                 leftWidth,
                 rightWidth,
                 isHorizontal: null // decided once movement exceeds a small threshold
@@ -3752,7 +3866,7 @@
             // or further left than the negative right panel's width.
             offset = Math.max(-ctx.rightWidth, Math.min(ctx.leftWidth, offset));
             ctx.lastOffset = offset;
-            ctx.row.style.transform = `translateX(${offset}px)`;
+            setSceneRowOffset(ctx.row, offset);
         }
 
         function onSceneSwipeUp() {
@@ -3771,8 +3885,7 @@
                 finalOffset = -ctx.rightWidth;
             }
 
-            ctx.row.style.transform = `translateX(${finalOffset}px)`;
-            ctx.lastOffset = finalOffset;
+            setSceneRowOffset(ctx.row, finalOffset);
 
             if (finalOffset === 0) {
                 if (sceneSwipeOpenWrap === ctx.wrap) sceneSwipeOpenWrap = null;
@@ -3789,7 +3902,7 @@
             cleanupSceneSwipeListeners();
             ctx.row.classList.remove("swiping");
             // Snap back to wherever it was before this gesture started.
-            ctx.row.style.transform = `translateX(${ctx.startOffset}px)`;
+            setSceneRowOffset(ctx.row, ctx.startOffset);
             sceneSwipeCtx = null;
         }
 
@@ -3802,12 +3915,12 @@
         function closeSceneSwipeWrap(wrap) {
             if (!wrap) return;
             const row = wrap.querySelector(".scene-row");
-            if (row) row.style.transform = "translateX(0px)";
+            if (row) setSceneRowOffset(row, 0);
             if (sceneSwipeOpenWrap === wrap) sceneSwipeOpenWrap = null;
         }
 
         // Called by the swipe-panel action buttons themselves (via `this`)
-        // so tapping Staging/Share/Delete also closes the row afterward.
+        // so tapping Staging/Share/Edit/Delete also closes the row afterward.
         function closeSceneSwipe(buttonEl) {
             const wrap = buttonEl.closest(".scene-row-wrap");
             closeSceneSwipeWrap(wrap);
@@ -4517,6 +4630,10 @@
                 alert("Paste in your script first.");
                 return;
             }
+
+            // A person who's started practicing is clearly past "brand new" —
+            // quietly retire the welcome banner so it doesn't reappear.
+            dismissWelcomeBanner();
 
             // Check if monologue mode
             const isMonologue = document.getElementById("monologueMode").checked;
@@ -5490,7 +5607,7 @@
             }
             const meta = document.querySelector('meta[name="theme-color"]');
             if (meta) {
-                meta.setAttribute("content", theme === "dark" ? "#0a0e0f" : "#fbfaf8");
+                meta.setAttribute("content", theme === "dark" ? "#0a0e0f" : "#f2f5f4");
             }
         }
 
@@ -5508,8 +5625,36 @@
             lockPortraitIfPossible();
             disablePullToRefresh();
             waitForShareApiThenCheckUrl();
+            initWelcomeBanner();
         });
         window.addEventListener("resize", updateBottomBarVisibility);
+
+        /* ---------------- First-visit welcome banner ---------------- */
+        const WELCOME_BANNER_STORAGE = "hasSeenWelcomeBanner";
+
+        function initWelcomeBanner() {
+            const banner = document.getElementById("welcomeBanner");
+            if (!banner) return;
+            try {
+                const alreadySeen = localStorage.getItem(WELCOME_BANNER_STORAGE) === "1";
+                const hasSavedScenes = Object.keys(loadScreenplays()).length > 0;
+                // Shown only for genuinely new users: never dismissed before,
+                // and no saved scenes exist yet (covers someone who cleared
+                // browser storage but already has real scenes elsewhere/synced).
+                if (!alreadySeen && !hasSavedScenes) {
+                    banner.style.display = "block";
+                }
+            } catch (e) {
+                // If localStorage/loadScreenplays throws for any reason, fail
+                // quietly with the banner hidden rather than breaking startup.
+            }
+        }
+
+        function dismissWelcomeBanner() {
+            const banner = document.getElementById("welcomeBanner");
+            if (banner) banner.style.display = "none";
+            try { localStorage.setItem(WELCOME_BANNER_STORAGE, "1"); } catch (e) {}
+        }
 
         // The Firestore helpers (swGetShare etc.) come from a type="module" script
         // that loads/executes after this one, so poll briefly rather than calling
