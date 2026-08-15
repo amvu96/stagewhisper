@@ -2280,6 +2280,7 @@
             const data = loadScreenplays();
             if (!data[play]) data[play] = {};
             const isNew = !(name in data[play]);
+            const existingScene = data[play][name];
             data[play][name] = {
                 script: raw,
                 myChar: document.getElementById("myChar").value.trim(),
@@ -2290,6 +2291,12 @@
                 ttsLang: document.getElementById("ttsLang").value,
                 updatedAt: Date.now()
             };
+            // Preserve fields that aren't managed by this form (e.g. the
+            // staging diagram, which is edited/saved separately) so that
+            // re-saving/editing a scene doesn't wipe them out.
+            if (existingScene && existingScene.staging) {
+                data[play][name].staging = existingScene.staging;
+            }
 
             // Save monologue-specific data
             if (isMonologueMode) {
